@@ -991,36 +991,8 @@ Lemma lstore_lift_free_restrict_fv_lvars_eq (σ : StoreT) D :
   storeA_restrict (lstore_lift_free (storeA_restrict σ (lvars_fv D)) : LStoreT) D =
   storeA_restrict (lstore_lift_free σ : LStoreT) D.
 Proof.
-  intros Hlc.
-  apply storeA_map_eq. intros z.
-  change (((storeA_restrict
-      (lstore_lift_free (store_restrict σ (lvars_fv D)) : LStoreT) D
-        : gmap logic_var value) !! z) =
-    ((storeA_restrict (lstore_lift_free σ : LStoreT) D
-        : gmap logic_var value) !! z)).
-  destruct (decide (z ∈ D)) as [HzD|HzD].
-	  2:{
-	    transitivity (@None value).
-	    - apply storeA_restrict_lookup_none_r. exact HzD.
-	    - symmetry. apply storeA_restrict_lookup_none_r. exact HzD.
-	  }
-  destruct z as [k|y].
-  - exfalso. exact (Hlc (LVBound k) HzD).
-  - assert (HyD : y ∈ lvars_fv D).
-    { apply lvars_fv_elem. exact HzD. }
-    destruct ((σ : gmap atom value) !! y) as [u|] eqn:Hσy.
-    + transitivity (Some u).
-	      * apply storeA_restrict_lookup_some_2; [|exact HzD].
-	        rewrite lstore_lift_free_lookup_free.
-  apply (storeA_restrict_lookup_some_2 _ _ _ _ Hσy HyD).
-      * symmetry. apply storeA_restrict_lookup_some_2; [|exact HzD].
-        rewrite lstore_lift_free_lookup_free. exact Hσy.
-    + transitivity (@None value).
-	      * apply storeA_restrict_lookup_none_l.
-	        rewrite lstore_lift_free_lookup_free.
-	        apply storeA_restrict_lookup_none_l. exact Hσy.
-      * symmetry. apply storeA_restrict_lookup_none_l.
-	        rewrite lstore_lift_free_lookup_free. exact Hσy.
+  intros _.
+  apply ContextLogic.FormulaAtom.lstore_lift_free_restrict_fv_lvars_eq.
 Qed.
 
 Lemma tm_must_terminating_agree_on_fv σ1 σ2 e :

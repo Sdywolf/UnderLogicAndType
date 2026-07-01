@@ -48,9 +48,10 @@ Lemma formula_fv_open_over_body_obs b φ y :
 Proof.
   etransitivity.
   - apply formula_fv_open_fibvars_qual_body_obs.
-    unfold over_result_body.
-    rewrite formula_fv_over, formula_fv_and, formula_fv_atom.
-    rewrite formula_fv_result_basic_typing_formula.
+    unfold over_result_body, typed_result_qual.
+    rewrite formula_fv_over, formula_fv_atom.
+    cbn [qual_dom qual_lvars qual_vars].
+    rewrite lvars_fv_union, lvars_fv_singleton_bound.
     set_solver.
   - rewrite context_ty_lvars_over_fv. set_solver.
 Qed.
@@ -63,9 +64,10 @@ Lemma formula_fv_open_under_body_obs b φ y :
 Proof.
   etransitivity.
   - apply formula_fv_open_fibvars_qual_body_obs.
-    unfold under_result_body.
-    rewrite formula_fv_under, formula_fv_and, formula_fv_atom.
-    rewrite formula_fv_result_basic_typing_formula.
+    unfold under_result_body, typed_result_qual.
+    rewrite formula_fv_under, formula_fv_atom.
+    cbn [qual_dom qual_lvars qual_vars].
+    rewrite lvars_fv_union, lvars_fv_singleton_bound.
     set_solver.
   - rewrite context_ty_lvars_under_fv. set_solver.
 Qed.

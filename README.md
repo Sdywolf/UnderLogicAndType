@@ -283,22 +283,32 @@ important for the precise over/under semantics used here.
 
 Because qualifiers themselves are untyped, a bare top qualifier would range
 over all syntactic values.  Thus `[v : Bool | top]` would otherwise also try to
-cover natural numbers.  The type denotation fixes this at the embedding point:
-the Over/Under result body conjoins the qualifier atom with a basic typing atom
-for the result slot.  The helper definitions are in
-`Denotation/theories/TypeDenote.v` (lines 80-87), and the expanded
-`CTOver`/`CTUnder` branches in `ty_denote_gas` show the same structure
-(lines 131-142):
+cover natural numbers.  The type denotation fixes this at the embedding point by
+building a typed qualifier atom.  The helper `typed_result_qual b φ` conjoins
+the shallow qualifier predicate with a base-typing check for the result slot
+inside the exact atom itself.  The helper definitions are in
+`Denotation/theories/TypeDenote.v` (lines 80-96), and the expanded
+`CTOver`/`CTUnder` branches in `ty_denote_gas` show where that typed atom is
+used (lines 140-149):
 
 ```coq
 Definition result_basic_typing_formula (b : base_ty) : FormulaT :=
   FHasType[(∅ ▷ TBase b)%lvar ⊢ (ret # 0)%core ⋮ TBase b].
 
+Definition typed_result_qual (b : base_ty) (φ : type_qualifier) : type_qualifier :=
+  tqual (qual_vars φ ∪ {[LVBound 0]})
+    (fun s =>
+      qual_prop φ
+        (lstore_on_restrict (qual_vars φ) s ltac:(set_solver)) /\
+      exists v,
+        (lso_store s : LStoreT) !! LVBound 0 = Some v /\
+        basic_value_has_ltype (∅ : lty_env) v (TBase b)).
+
 Definition over_result_body (b : base_ty) (φ : type_qualifier) : FormulaT :=
-  (over (@atom φ ∧ result_basic_typing_formula b))%formula.
+  (over (@atom (typed_result_qual b φ)))%formula.
 
 Definition under_result_body (b : base_ty) (φ : type_qualifier) : FormulaT :=
-  (under (@atom φ ∧ result_basic_typing_formula b))%formula.
+  (under (@atom (typed_result_qual b φ)))%formula.
 ```
 
 ### Type denotation

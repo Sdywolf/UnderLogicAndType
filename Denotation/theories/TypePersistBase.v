@@ -9,15 +9,15 @@ From ContextAlgebra Require Import ResourceAlgebra.
 
 Section TypePersist.
 
-Definition over_open_body (φ : type_qualifier) (z : atom) : FormulaT :=
+Definition over_open_body b (φ : type_qualifier) (z : atom) : FormulaT :=
   FFibVars
     (qual_vars (qual_open_atom 0 z φ) ∖ {[LVFree z]})
-    (FOver (FAtom (qual_open_atom 0 z φ))).
+    (FOver (FAtom (qual_open_atom 0 z (typed_result_qual b φ)))).
 
-Definition under_open_body (φ : type_qualifier) (z : atom) : FormulaT :=
+Definition under_open_body b (φ : type_qualifier) (z : atom) : FormulaT :=
   FFibVars
     (qual_vars (qual_open_atom 0 z φ) ∖ {[LVFree z]})
-    (FUnder (FAtom (qual_open_atom 0 z φ))).
+    (FUnder (FAtom (qual_open_atom 0 z (typed_result_qual b φ)))).
 
 Definition over_ret_fvar_env (Σ : lty_env) b (φ : type_qualifier) z : lty_env :=
   <[LVFree z := TBase b]>
@@ -107,10 +107,11 @@ Lemma formula_open_over_self_body_normalize φ z :
   LVFree z ∉ qual_vars φ ->
   formula_open 0 z
     (FFibVars (qual_vars φ ∖ {[LVBound 0]}) (FOver (FAtom φ))) =
-  over_open_body φ z.
+  (FFibVars
+    (qual_vars (qual_open_atom 0 z φ) ∖ {[LVFree z]})
+    (FOver (FAtom (qual_open_atom 0 z φ))) : FormulaT).
 Proof.
   intros Hzφ.
-  unfold over_open_body.
   rewrite formula_open_fibvars, formula_open_over, formula_open_atom.
   rewrite qual_open_atom_vars.
   rewrite lvars_open0_difference_bound0_normalize by exact Hzφ.
@@ -121,10 +122,11 @@ Lemma formula_open_under_self_body_normalize φ z :
   LVFree z ∉ qual_vars φ ->
   formula_open 0 z
     (FFibVars (qual_vars φ ∖ {[LVBound 0]}) (FUnder (FAtom φ))) =
-  under_open_body φ z.
+  (FFibVars
+    (qual_vars (qual_open_atom 0 z φ) ∖ {[LVFree z]})
+    (FUnder (FAtom (qual_open_atom 0 z φ))) : FormulaT).
 Proof.
   intros Hzφ.
-  unfold under_open_body.
   rewrite formula_open_fibvars, formula_open_under, formula_open_atom.
   rewrite qual_open_atom_vars.
   rewrite lvars_open0_difference_bound0_normalize by exact Hzφ.
@@ -135,12 +137,11 @@ Lemma formula_open_over_typed_body_normalize b φ z :
   LVFree z ∉ qual_vars φ ->
   formula_open 0 z
     (FFibVars (qual_vars φ ∖ {[LVBound 0]}) (over_result_body b φ)) =
-  FFibVars
-    (qual_vars (qual_open_atom 0 z φ) ∖ {[LVFree z]})
-    (formula_open 0 z (over_result_body b φ)).
+  over_open_body b φ z.
 Proof.
   intros Hzφ.
-  rewrite formula_open_fibvars.
+  unfold over_open_body.
+  rewrite formula_open_fibvars, formula_open_over_result_body.
   rewrite qual_open_atom_vars.
   rewrite lvars_open0_difference_bound0_normalize by exact Hzφ.
   reflexivity.
@@ -150,12 +151,11 @@ Lemma formula_open_under_typed_body_normalize b φ z :
   LVFree z ∉ qual_vars φ ->
   formula_open 0 z
     (FFibVars (qual_vars φ ∖ {[LVBound 0]}) (under_result_body b φ)) =
-  FFibVars
-    (qual_vars (qual_open_atom 0 z φ) ∖ {[LVFree z]})
-    (formula_open 0 z (under_result_body b φ)).
+  under_open_body b φ z.
 Proof.
   intros Hzφ.
-  rewrite formula_open_fibvars.
+  unfold under_open_body.
+  rewrite formula_open_fibvars, formula_open_under_result_body.
   rewrite qual_open_atom_vars.
   rewrite lvars_open0_difference_bound0_normalize by exact Hzφ.
   reflexivity.
@@ -188,256 +188,60 @@ Lemma over_open_body_from_typed b φ z (m : WfWorldT) :
   m ⊨ FFibVars
       (qual_vars (qual_open_atom 0 z φ) ∖ {[LVFree z]})
       (formula_open 0 z (over_result_body b φ)) ->
-  m ⊨ over_open_body φ z.
+  m ⊨ over_open_body b φ z.
 Proof.
   intros Htyped.
   unfold over_open_body.
   rewrite formula_open_over_result_body in Htyped.
-  apply res_models_FFibVars_iff in Htyped as [Hscope [Hlc Hfib]].
-  apply res_models_FFibVars_iff.
-  split.
-  - unfold formula_scoped_in_world in *.
-    intros x Hx. apply Hscope.
-    rewrite formula_fv_fibvars in Hx |- *.
-    rewrite formula_fv_over, formula_fv_atom in Hx.
-    unfold over_result_body.
-    rewrite formula_fv_over, formula_fv_and, formula_fv_atom,
-      formula_fv_expr_basic_typing_formula.
-    rewrite dom_insert_L, dom_empty_L, lvars_fv_union,
-      lvars_fv_singleton_free, lvars_fv_empty.
-    apply elem_of_union in Hx as [Hx|Hx].
-    + apply elem_of_union_l. exact Hx.
-    + apply elem_of_union_r. apply elem_of_union_l. exact Hx.
-  - split; [exact Hlc|].
-    intros σ mfib Hproj.
-    pose proof (Hfib σ mfib Hproj) as Hbody.
-    cbn [formula_msubst_store formula_mlsubst] in Hbody |- *.
-    apply (res_models_over_and_elim_l _ _
-      (formula_msubst_store σ
-        (expr_basic_typing_formula (<[LVFree z:=TBase b]> ∅)
-          (tret (vfvar z)) (TBase b)))).
-    exact Hbody.
+  exact Htyped.
 Qed.
 
 Lemma under_open_body_from_typed b φ z (m : WfWorldT) :
   m ⊨ FFibVars
       (qual_vars (qual_open_atom 0 z φ) ∖ {[LVFree z]})
       (formula_open 0 z (under_result_body b φ)) ->
-  m ⊨ under_open_body φ z.
+  m ⊨ under_open_body b φ z.
 Proof.
   intros Htyped.
   unfold under_open_body.
   rewrite formula_open_under_result_body in Htyped.
-  apply res_models_FFibVars_iff in Htyped as [Hscope [Hlc Hfib]].
-  apply res_models_FFibVars_iff.
-  split.
-  - unfold formula_scoped_in_world in *.
-    intros x Hx. apply Hscope.
-    rewrite formula_fv_fibvars in Hx |- *.
-    rewrite formula_fv_under, formula_fv_atom in Hx.
-    unfold under_result_body.
-    rewrite formula_fv_under, formula_fv_and, formula_fv_atom,
-      formula_fv_expr_basic_typing_formula.
-    rewrite dom_insert_L, dom_empty_L, lvars_fv_union,
-      lvars_fv_singleton_free, lvars_fv_empty.
-    set_solver.
-  - split; [exact Hlc|].
-    intros σ mfib Hproj.
-    pose proof (Hfib σ mfib Hproj) as Hbody.
-    cbn [formula_msubst_store formula_mlsubst] in Hbody |- *.
-    apply (res_models_under_and_elim_l _ _
-      (formula_msubst_store σ
-        (expr_basic_typing_formula (<[LVFree z:=TBase b]> ∅)
-          (tret (vfvar z)) (TBase b)))).
-    exact Hbody.
+  exact Htyped.
 Qed.
 
 Lemma over_open_body_to_typed b φ z (m : WfWorldT) :
   z ∈ world_dom (m : WorldT) ->
-  m ⊨ over_open_body φ z ->
+  m ⊨ over_open_body b φ z ->
   m ⊨ FFibVars
       (qual_vars (qual_open_atom 0 z φ) ∖ {[LVFree z]})
       (formula_open 0 z (over_result_body b φ)).
 Proof.
-  intros Hzm Hbody.
+  intros _ Hbody.
   unfold over_open_body in Hbody.
   rewrite formula_open_over_result_body.
-  apply res_models_FFibVars_iff in Hbody as [Hscope [Hlc Hfib]].
-  apply res_models_FFibVars_iff.
-  split.
-  - unfold formula_scoped_in_world in *.
-    intros x Hx.
-    rewrite formula_fv_fibvars in Hx.
-    unfold over_result_body in Hx.
-    rewrite formula_fv_over, formula_fv_and, formula_fv_atom,
-      formula_fv_expr_basic_typing_formula in Hx.
-    rewrite dom_insert_L, dom_empty_L, lvars_fv_union,
-      lvars_fv_singleton_free, lvars_fv_empty in Hx.
-    apply elem_of_union in Hx as [Hx|Hx].
-    + apply Hscope.
-      rewrite formula_fv_fibvars, formula_fv_over, formula_fv_atom.
-      apply elem_of_union_l. exact Hx.
-    + apply elem_of_union in Hx as [Hx|Hx].
-      * apply Hscope.
-        rewrite formula_fv_fibvars, formula_fv_over, formula_fv_atom.
-        apply elem_of_union_r. exact Hx.
-      * apply elem_of_union in Hx as [Hx|Hx].
-        -- apply elem_of_singleton in Hx. subst x. exact Hzm.
-        -- rewrite elem_of_empty in Hx. contradiction.
-  - split; [exact Hlc|].
-    intros σ mfib Hproj.
-    pose proof (Hfib σ mfib Hproj) as Hover_old.
-    cbn [formula_msubst_store formula_mlsubst] in Hover_old |- *.
-    unfold res_models in Hover_old |- *.
-    cbn [formula_measure res_models_fuel] in Hover_old |- *.
-    destruct Hover_old as [Hscope_over [mo [Hsub Hatom]]].
-    split.
-    + unfold formula_scoped_in_world in *.
-      intros x Hx.
-      rewrite formula_fv_over, formula_fv_and, formula_fv_atom in Hx.
-      apply elem_of_union in Hx as [Hx|Hx].
-      * apply Hscope_over.
-        rewrite formula_fv_over, formula_fv_atom.
-        exact Hx.
-      * apply formula_mlsubst_fv_subset in Hx.
-        rewrite formula_fv_expr_basic_typing_formula in Hx.
-           rewrite dom_insert_L, dom_empty_L, lvars_fv_union,
-             lvars_fv_singleton_free, lvars_fv_empty in Hx.
-           apply elem_of_union in Hx as [Hx|Hx].
-           ++ apply elem_of_singleton in Hx. subst x.
-              pose proof (res_fiber_from_projection_world_dom m mfib
-                (lvars_fv (qual_vars (qual_open_atom 0 z φ) ∖ {[LVFree z]}))
-                σ Hproj) as Hdom_fib.
-              rewrite Hdom_fib. exact Hzm.
-	           ++ rewrite elem_of_empty in Hx. contradiction.
-    + exists mo. split; [exact Hsub|].
-      apply res_models_and_intro_from_models.
-      * unfold res_models. models_fuel_irrel Hatom.
-      * change (mo ⊨ formula_msubst_store σ
-          (expr_basic_typing_formula
-            (<[LVFree z:=TBase b]> ∅) (tret (vfvar z)) (TBase b))).
-        rewrite formula_msubst_store_expr_basic_typing_ret_fvar_fresh.
-        -- apply expr_basic_typing_formula_ret_fvar_singleton.
-           pose proof (res_fiber_from_projection_world_dom m mfib
-             (lvars_fv (qual_vars (qual_open_atom 0 z φ) ∖ {[LVFree z]}))
-             σ Hproj) as Hdom_fib.
-           pose proof (proj1 Hsub) as Hdom_sub.
-           change (world_dom (mfib : WorldT) = world_dom (mo : WorldT))
-             in Hdom_sub.
-           rewrite <- Hdom_sub.
-           rewrite Hdom_fib. exact Hzm.
-        -- destruct Hproj as [Hσ _].
-           destruct Hσ as [τ [_ Hτ]].
-           intros Hzσ.
-           rewrite <- Hτ in Hzσ.
-           change (z ∈ dom (storeA_restrict (τ : gmap atom value)
-             (lvars_fv (qual_vars (qual_open_atom 0 z φ) ∖ {[LVFree z]}))
-             : gmap atom value)) in Hzσ.
-           rewrite storeA_restrict_dom in Hzσ.
-           apply elem_of_intersection in Hzσ as [_ HzD].
-           apply lvars_fv_elem in HzD.
-           rewrite elem_of_difference in HzD.
-           destruct HzD as [_ Hznot].
-           apply Hznot. apply elem_of_singleton. reflexivity.
+  exact Hbody.
 Qed.
 
 Lemma under_open_body_to_typed b φ z (m : WfWorldT) :
   z ∈ world_dom (m : WorldT) ->
-  m ⊨ under_open_body φ z ->
+  m ⊨ under_open_body b φ z ->
   m ⊨ FFibVars
       (qual_vars (qual_open_atom 0 z φ) ∖ {[LVFree z]})
       (formula_open 0 z (under_result_body b φ)).
 Proof.
-  intros Hzm Hbody.
+  intros _ Hbody.
   unfold under_open_body in Hbody.
   rewrite formula_open_under_result_body.
-  apply res_models_FFibVars_iff in Hbody as [Hscope [Hlc Hfib]].
-  apply res_models_FFibVars_iff.
-  split.
-  - unfold formula_scoped_in_world in *.
-    intros x Hx.
-    rewrite formula_fv_fibvars in Hx.
-    unfold under_result_body in Hx.
-    rewrite formula_fv_under, formula_fv_and, formula_fv_atom,
-      formula_fv_expr_basic_typing_formula in Hx.
-    rewrite dom_insert_L, dom_empty_L, lvars_fv_union,
-      lvars_fv_singleton_free, lvars_fv_empty in Hx.
-    apply elem_of_union in Hx as [Hx|Hx].
-    + apply Hscope.
-      rewrite formula_fv_fibvars, formula_fv_under, formula_fv_atom.
-      apply elem_of_union_l. exact Hx.
-    + apply elem_of_union in Hx as [Hx|Hx].
-      * apply Hscope.
-        rewrite formula_fv_fibvars, formula_fv_under, formula_fv_atom.
-        apply elem_of_union_r. exact Hx.
-      * apply elem_of_union in Hx as [Hx|Hx].
-        -- apply elem_of_singleton in Hx. subst x. exact Hzm.
-        -- rewrite elem_of_empty in Hx. contradiction.
-  - split; [exact Hlc|].
-    intros σ mfib Hproj.
-    pose proof (Hfib σ mfib Hproj) as Hunder_old.
-    cbn [formula_msubst_store formula_mlsubst] in Hunder_old |- *.
-    unfold res_models in Hunder_old |- *.
-    cbn [formula_measure res_models_fuel] in Hunder_old |- *.
-    destruct Hunder_old as [Hscope_under [mo [Hsub Hatom]]].
-    split.
-    + unfold formula_scoped_in_world in *.
-      intros x Hx.
-      rewrite formula_fv_under, formula_fv_and, formula_fv_atom in Hx.
-      apply elem_of_union in Hx as [Hx|Hx].
-      * apply Hscope_under.
-        rewrite formula_fv_under, formula_fv_atom.
-        exact Hx.
-      * apply formula_mlsubst_fv_subset in Hx.
-        rewrite formula_fv_expr_basic_typing_formula in Hx.
-        rewrite dom_insert_L, dom_empty_L, lvars_fv_union,
-          lvars_fv_singleton_free, lvars_fv_empty in Hx.
-        apply elem_of_union in Hx as [Hx|Hx].
-        -- apply elem_of_singleton in Hx. subst x.
-           pose proof (res_fiber_from_projection_world_dom m mfib
-             (lvars_fv (qual_vars (qual_open_atom 0 z φ) ∖ {[LVFree z]}))
-             σ Hproj) as Hdom_fib.
-           rewrite Hdom_fib. exact Hzm.
-        -- rewrite elem_of_empty in Hx. contradiction.
-    + exists mo. split; [exact Hsub|].
-      apply res_models_and_intro_from_models.
-      * unfold res_models. models_fuel_irrel Hatom.
-      * change (mo ⊨ formula_msubst_store σ
-          (expr_basic_typing_formula
-            (<[LVFree z:=TBase b]> ∅) (tret (vfvar z)) (TBase b))).
-        rewrite formula_msubst_store_expr_basic_typing_ret_fvar_fresh.
-        -- apply expr_basic_typing_formula_ret_fvar_singleton.
-           pose proof (res_fiber_from_projection_world_dom m mfib
-             (lvars_fv (qual_vars (qual_open_atom 0 z φ) ∖ {[LVFree z]}))
-             σ Hproj) as Hdom_fib.
-           pose proof (proj1 Hsub) as Hdom_sub.
-           change (world_dom (mo : WorldT) = world_dom (mfib : WorldT))
-             in Hdom_sub.
-           rewrite Hdom_sub.
-           rewrite Hdom_fib. exact Hzm.
-        -- destruct Hproj as [Hσ _].
-           destruct Hσ as [τ [_ Hτ]].
-           intros Hzσ.
-           rewrite <- Hτ in Hzσ.
-           change (z ∈ dom (storeA_restrict (τ : gmap atom value)
-             (lvars_fv (qual_vars (qual_open_atom 0 z φ) ∖ {[LVFree z]}))
-             : gmap atom value)) in Hzσ.
-           rewrite storeA_restrict_dom in Hzσ.
-           apply elem_of_intersection in Hzσ as [_ HzD].
-           apply lvars_fv_elem in HzD.
-           rewrite elem_of_difference in HzD.
-           destruct HzD as [_ Hznot].
-           apply Hznot. apply elem_of_singleton. reflexivity.
+  exact Hbody.
 Qed.
 
-Lemma formula_atom_swap_over_open_body φ x y :
+Lemma formula_atom_swap_over_open_body b φ x y :
   x ∉ qual_dom φ ->
   y ∉ qual_dom φ ->
-  formula_atom_swap x y (over_open_body φ x) =
-  over_open_body φ y.
+  formula_atom_swap x y (over_open_body b φ x) =
+  over_open_body b φ y.
 Proof.
   intros Hx Hy.
-  set (P := FFibVars (qual_vars φ ∖ {[LVBound 0]}) (FOver (FAtom φ))).
+  set (P := FFibVars (qual_vars φ ∖ {[LVBound 0]}) (over_result_body b φ)).
   assert (Hxvars : LVFree x ∉ qual_vars φ).
   {
     intros Hbad. apply Hx.
@@ -450,34 +254,42 @@ Proof.
   }
   assert (Hxfv : x ∉ formula_fv P).
   {
-    subst P. rewrite formula_fv_fibvars, formula_fv_over, formula_fv_atom.
-    intros Hbad. apply elem_of_union in Hbad as [Hbad|Hbad]; [|exact (Hx Hbad)].
+    subst P. rewrite formula_fv_fibvars.
+    unfold over_result_body, typed_result_qual.
+    rewrite formula_fv_over, formula_fv_atom.
+    cbn [qual_dom qual_lvars qual_vars].
+    rewrite lvars_fv_union, lvars_fv_singleton_bound.
+    intros Hbad. apply elem_of_union in Hbad as [Hbad|Hbad]; [|set_solver].
     apply Hx. unfold qual_dom.
     eapply lvars_fv_mono; [|exact Hbad].
     set_solver.
   }
   assert (Hyfv : y ∉ formula_fv P).
   {
-    subst P. rewrite formula_fv_fibvars, formula_fv_over, formula_fv_atom.
-    intros Hbad. apply elem_of_union in Hbad as [Hbad|Hbad]; [|exact (Hy Hbad)].
+    subst P. rewrite formula_fv_fibvars.
+    unfold over_result_body, typed_result_qual.
+    rewrite formula_fv_over, formula_fv_atom.
+    cbn [qual_dom qual_lvars qual_vars].
+    rewrite lvars_fv_union, lvars_fv_singleton_bound.
+    intros Hbad. apply elem_of_union in Hbad as [Hbad|Hbad]; [|set_solver].
     apply Hy. unfold qual_dom.
     eapply lvars_fv_mono; [|exact Hbad].
     set_solver.
   }
-  rewrite <- (formula_open_over_self_body_normalize φ x Hxvars).
+  rewrite <- (formula_open_over_typed_body_normalize b φ x Hxvars).
   rewrite formula_atom_swap_open_fresh by (exact Hxfv || exact Hyfv).
-  rewrite formula_open_over_self_body_normalize by exact Hyvars.
+  rewrite formula_open_over_typed_body_normalize by exact Hyvars.
   reflexivity.
 Qed.
 
-Lemma formula_atom_swap_under_open_body φ x y :
+Lemma formula_atom_swap_under_open_body b φ x y :
   x ∉ qual_dom φ ->
   y ∉ qual_dom φ ->
-  formula_atom_swap x y (under_open_body φ x) =
-  under_open_body φ y.
+  formula_atom_swap x y (under_open_body b φ x) =
+  under_open_body b φ y.
 Proof.
   intros Hx Hy.
-  set (P := FFibVars (qual_vars φ ∖ {[LVBound 0]}) (FUnder (FAtom φ))).
+  set (P := FFibVars (qual_vars φ ∖ {[LVBound 0]}) (under_result_body b φ)).
   assert (Hxvars : LVFree x ∉ qual_vars φ).
   {
     intros Hbad. apply Hx.
@@ -490,28 +302,36 @@ Proof.
   }
   assert (Hxfv : x ∉ formula_fv P).
   {
-    subst P. rewrite formula_fv_fibvars, formula_fv_under, formula_fv_atom.
-    intros Hbad. apply elem_of_union in Hbad as [Hbad|Hbad]; [|exact (Hx Hbad)].
+    subst P. rewrite formula_fv_fibvars.
+    unfold under_result_body, typed_result_qual.
+    rewrite formula_fv_under, formula_fv_atom.
+    cbn [qual_dom qual_lvars qual_vars].
+    rewrite lvars_fv_union, lvars_fv_singleton_bound.
+    intros Hbad. apply elem_of_union in Hbad as [Hbad|Hbad]; [|set_solver].
     apply Hx. unfold qual_dom.
     eapply lvars_fv_mono; [|exact Hbad].
     set_solver.
   }
   assert (Hyfv : y ∉ formula_fv P).
   {
-    subst P. rewrite formula_fv_fibvars, formula_fv_under, formula_fv_atom.
-    intros Hbad. apply elem_of_union in Hbad as [Hbad|Hbad]; [|exact (Hy Hbad)].
+    subst P. rewrite formula_fv_fibvars.
+    unfold under_result_body, typed_result_qual.
+    rewrite formula_fv_under, formula_fv_atom.
+    cbn [qual_dom qual_lvars qual_vars].
+    rewrite lvars_fv_union, lvars_fv_singleton_bound.
+    intros Hbad. apply elem_of_union in Hbad as [Hbad|Hbad]; [|set_solver].
     apply Hy. unfold qual_dom.
     eapply lvars_fv_mono; [|exact Hbad].
     set_solver.
   }
-  rewrite <- (formula_open_under_self_body_normalize φ x Hxvars).
+  rewrite <- (formula_open_under_typed_body_normalize b φ x Hxvars).
   rewrite formula_atom_swap_open_fresh by (exact Hxfv || exact Hyfv).
-  rewrite formula_open_under_self_body_normalize by exact Hyvars.
+  rewrite formula_open_under_typed_body_normalize by exact Hyvars.
   reflexivity.
 Qed.
 
-Lemma formula_fv_over_open_body_subset φ z :
-  formula_fv (over_open_body φ z) ⊆ qual_dom φ ∪ {[z]}.
+Lemma formula_fv_over_open_body_subset b φ z :
+  formula_fv (over_open_body b φ z) ⊆ qual_dom φ ∪ {[z]}.
 Proof.
   unfold over_open_body.
   rewrite formula_fv_fibvars, formula_fv_over, formula_fv_atom.
@@ -525,9 +345,12 @@ Proof.
     { apply lvars_fv_elem. exact Ha. }
     apply Hsub in Ha_fv.
     unfold qual_dom. set_solver.
-  - pose proof (qual_open_atom_dom_subset 0 z φ) as Hsub.
-    unfold qual_dom in Ha.
-    apply Hsub in Ha. set_solver.
+  - pose proof (qual_open_atom_dom_subset 0 z (typed_result_qual b φ)) as Hsub.
+    apply Hsub in Ha.
+    unfold typed_result_qual, qual_dom in Ha.
+    cbn [qual_lvars qual_vars] in Ha.
+    rewrite lvars_fv_union, lvars_fv_singleton_bound in Ha.
+    set_solver.
 Qed.
 
 Lemma basic_over_empty_fv b φ :
@@ -546,10 +369,10 @@ Qed.
 
 Lemma over_open_body_closed_arg_fv b φ y :
   basic_context_ty ∅ (CTOver b φ) ->
-  formula_fv (over_open_body φ y) ⊆ {[y]}.
+  formula_fv (over_open_body b φ y) ⊆ {[y]}.
 Proof.
   intros Hbasic.
-  pose proof (formula_fv_over_open_body_subset φ y) as Hfv.
+  pose proof (formula_fv_over_open_body_subset b φ y) as Hfv.
   assert (Hφfv : qual_dom φ ⊆ fv_cty (CTOver b φ)).
   {
     unfold qual_dom, fv_cty, context_ty_lvars.
@@ -566,9 +389,9 @@ Proof.
   - exact Hxy.
 Qed.
 
-Lemma fiberwise_joinable_on_over_open_body X φ z :
+Lemma fiberwise_joinable_on_over_open_body X b φ z :
   z ∉ X ->
-  fiberwise_joinable_on X (over_open_body φ z).
+  fiberwise_joinable_on X (over_open_body b φ z).
 Proof.
   intros HzX.
   unfold over_open_body.
@@ -576,21 +399,31 @@ Proof.
   - rewrite formula_fv_over, formula_fv_atom.
     intros a Ha.
     apply elem_of_intersection in Ha as [HaX Ha].
-    apply lvars_fv_elem.
+    pose proof (qual_open_atom_dom_subset 0 z (typed_result_qual b φ)) as Hsub.
+    apply Hsub in Ha.
+    unfold typed_result_qual, qual_dom in Ha.
+    cbn [qual_lvars qual_vars] in Ha.
+    rewrite lvars_fv_union, lvars_fv_singleton_bound in Ha.
+    apply elem_of_union in Ha as [Ha|Ha]; [|set_solver].
+    rewrite lvars_fv_elem.
     apply elem_of_difference. split.
-    + apply lvars_fv_elem. exact Ha.
+    + rewrite qual_open_atom_vars.
+      assert (Haφ : a ∈ lvars_fv (qual_vars φ)) by set_solver.
+      assert (Haz : a <> z) by set_solver.
+      replace (LVFree a) with (logic_var_open 0 z (LVFree a)).
+      * apply lvars_open_elem_open.
+        rewrite <- lvars_fv_elem. exact Haφ.
+      * unfold swap. repeat destruct decide; congruence.
     + intros Haz. apply elem_of_singleton in Haz.
-      inversion Haz. subst a.
-    apply HzX.
-      exact HaX.
+      inversion Haz. subst a. apply HzX. exact HaX.
   - intros σ.
     cbn [formula_msubst_store].
     apply fiberwise_joinable_on_over_atom.
 Qed.
 
-Lemma fiberwise_stable_on_over_open_body X φ z :
-  formula_fv (over_open_body φ z) ⊆ X ->
-  fiberwise_stable_on X (over_open_body φ z).
+Lemma fiberwise_stable_on_over_open_body X b φ z :
+  formula_fv (over_open_body b φ z) ⊆ X ->
+  fiberwise_stable_on X (over_open_body b φ z).
 Proof.
   unfold over_open_body.
   apply fiberwise_stable_on_fibvars_over_atom.
@@ -603,48 +436,14 @@ Lemma fiberwise_joinable_on_over_open_typed_body X b φ z :
       (qual_vars (qual_open_atom 0 z φ) ∖ {[LVFree z]})
       (formula_open 0 z (over_result_body b φ))).
 Proof.
-  intros HzX m Hfib.
-  assert (Hbody : m ⊨ over_open_body φ z).
-  {
-    pose proof (fiberwise_joinable_on_over_open_body X φ z HzX m) as Hjoin.
-    apply Hjoin.
-    intros σ mfib Hproj.
-    eapply over_open_body_from_typed.
-    exact (Hfib σ mfib Hproj).
-  }
-  assert (Hzm : z ∈ world_dom (m : WorldT)).
-  {
-    destruct (world_wf m) as [[ρ Hρ] _].
-    destruct (res_fiber_from_projection_of_store_any_domain m X ρ Hρ)
-      as [mfib [Hproj _]].
-    pose proof (Hfib (store_restrict ρ X) mfib Hproj) as Htyped.
-    apply res_models_FFibVars_iff in Htyped as [Hscope _].
-    pose proof (Hscope z) as Hscope_z.
-    assert (Hzfv :
-      z ∈ formula_fv
-        (FFibVars
-          (qual_vars (qual_open_atom 0 z φ) ∖ {[LVFree z]})
-          (formula_open 0 z (over_result_body b φ)))).
-    {
-      rewrite formula_fv_fibvars.
-      apply elem_of_union_r.
-      rewrite formula_open_over_result_body.
-      rewrite formula_fv_over, formula_fv_and, formula_fv_atom.
-      rewrite formula_fv_expr_basic_typing_formula.
-      rewrite dom_insert_L, dom_empty_L, lvars_fv_union,
-        lvars_fv_singleton_free, lvars_fv_empty.
-      set_solver.
-    }
-    specialize (Hscope_z Hzfv).
-    rewrite (res_fiber_from_projection_world_dom m mfib X
-      (store_restrict ρ X) Hproj) in Hscope_z.
-    exact Hscope_z.
-  }
-  apply over_open_body_to_typed; assumption.
+  intros HzX.
+  rewrite formula_open_over_result_body.
+  apply fiberwise_joinable_on_over_open_body.
+  exact HzX.
 Qed.
 
-Lemma formula_fv_under_open_body_subset φ z :
-  formula_fv (under_open_body φ z) ⊆ qual_dom φ ∪ {[z]}.
+Lemma formula_fv_under_open_body_subset b φ z :
+  formula_fv (under_open_body b φ z) ⊆ qual_dom φ ∪ {[z]}.
 Proof.
   unfold under_open_body.
   rewrite formula_fv_fibvars, formula_fv_under, formula_fv_atom.
@@ -658,17 +457,20 @@ Proof.
     { apply lvars_fv_elem. exact Ha. }
     apply Hsub in Ha_fv.
     unfold qual_dom. set_solver.
-  - pose proof (qual_open_atom_dom_subset 0 z φ) as Hsub.
-    unfold qual_dom in Ha.
-    apply Hsub in Ha. set_solver.
+  - pose proof (qual_open_atom_dom_subset 0 z (typed_result_qual b φ)) as Hsub.
+    apply Hsub in Ha.
+    unfold typed_result_qual, qual_dom in Ha.
+    cbn [qual_lvars qual_vars] in Ha.
+    rewrite lvars_fv_union, lvars_fv_singleton_bound in Ha.
+    set_solver.
 Qed.
 
 Lemma under_open_body_closed_arg_fv b φ y :
   basic_context_ty ∅ (CTOver b φ) ->
-  formula_fv (under_open_body φ y) ⊆ {[y]}.
+  formula_fv (under_open_body b φ y) ⊆ {[y]}.
 Proof.
   intros Hbasic.
-  pose proof (formula_fv_under_open_body_subset φ y) as Hfv.
+  pose proof (formula_fv_under_open_body_subset b φ y) as Hfv.
   assert (Hφfv : qual_dom φ ⊆ fv_cty (CTOver b φ)).
   {
     unfold qual_dom, fv_cty, context_ty_lvars.
@@ -685,9 +487,9 @@ Proof.
   - exact Hxy.
 Qed.
 
-Lemma fiberwise_joinable_on_under_open_body X φ z :
+Lemma fiberwise_joinable_on_under_open_body X b φ z :
   z ∉ X ->
-  fiberwise_joinable_on X (under_open_body φ z).
+  fiberwise_joinable_on X (under_open_body b φ z).
 Proof.
   intros HzX.
   unfold under_open_body.
@@ -695,9 +497,21 @@ Proof.
   - rewrite formula_fv_under, formula_fv_atom.
     intros a Ha.
     apply elem_of_intersection in Ha as [HaX Ha].
-    apply lvars_fv_elem.
+    pose proof (qual_open_atom_dom_subset 0 z (typed_result_qual b φ)) as Hsub.
+    apply Hsub in Ha.
+    unfold typed_result_qual, qual_dom in Ha.
+    cbn [qual_lvars qual_vars] in Ha.
+    rewrite lvars_fv_union, lvars_fv_singleton_bound in Ha.
+    apply elem_of_union in Ha as [Ha|Ha]; [|set_solver].
+    rewrite lvars_fv_elem.
     apply elem_of_difference. split.
-    + apply lvars_fv_elem. exact Ha.
+    + rewrite qual_open_atom_vars.
+      assert (Haφ : a ∈ lvars_fv (qual_vars φ)) by set_solver.
+      assert (Haz : a <> z) by set_solver.
+      replace (LVFree a) with (logic_var_open 0 z (LVFree a)).
+      * apply lvars_open_elem_open.
+        rewrite <- lvars_fv_elem. exact Haφ.
+      * unfold swap. repeat destruct decide; congruence.
     + intros Haz. apply elem_of_singleton in Haz.
       inversion Haz. subst a. exact (HzX HaX).
   - intros σ.
@@ -712,44 +526,10 @@ Lemma fiberwise_joinable_on_under_open_typed_body X b φ z :
       (qual_vars (qual_open_atom 0 z φ) ∖ {[LVFree z]})
       (formula_open 0 z (under_result_body b φ))).
 Proof.
-  intros HzX m Hfib.
-  assert (Hbody : m ⊨ under_open_body φ z).
-  {
-    pose proof (fiberwise_joinable_on_under_open_body X φ z HzX m) as Hjoin.
-    apply Hjoin.
-    intros σ mfib Hproj.
-    eapply under_open_body_from_typed.
-    exact (Hfib σ mfib Hproj).
-  }
-  assert (Hzm : z ∈ world_dom (m : WorldT)).
-  {
-    destruct (world_wf m) as [[ρ Hρ] _].
-    destruct (res_fiber_from_projection_of_store_any_domain m X ρ Hρ)
-      as [mfib [Hproj _]].
-    pose proof (Hfib (store_restrict ρ X) mfib Hproj) as Htyped.
-    apply res_models_FFibVars_iff in Htyped as [Hscope _].
-    pose proof (Hscope z) as Hscope_z.
-    assert (Hzfv :
-      z ∈ formula_fv
-        (FFibVars
-          (qual_vars (qual_open_atom 0 z φ) ∖ {[LVFree z]})
-          (formula_open 0 z (under_result_body b φ)))).
-    {
-      rewrite formula_fv_fibvars.
-      apply elem_of_union_r.
-      rewrite formula_open_under_result_body.
-      rewrite formula_fv_under, formula_fv_and, formula_fv_atom.
-      rewrite formula_fv_expr_basic_typing_formula.
-      rewrite dom_insert_L, dom_empty_L, lvars_fv_union,
-        lvars_fv_singleton_free, lvars_fv_empty.
-      set_solver.
-    }
-    specialize (Hscope_z Hzfv).
-    rewrite (res_fiber_from_projection_world_dom m mfib X
-      (store_restrict ρ X) Hproj) in Hscope_z.
-    exact Hscope_z.
-  }
-  apply under_open_body_to_typed; assumption.
+  intros HzX.
+  rewrite formula_open_under_result_body.
+  apply fiberwise_joinable_on_under_open_body.
+  exact HzX.
 Qed.
 
 Lemma ty_denote_gas_persist_open_result
@@ -1073,7 +853,7 @@ Proof.
 Qed.
 
 Lemma over_open_body_transport_ret_fvar_result
-    D φ x y (m my : WfWorldT) :
+    D b φ x y (m my : WfWorldT) :
   qual_dom φ ⊆ world_dom (m : WorldT) ->
   x ∈ world_dom (m : WorldT) ->
   y ∉ world_dom (m : WorldT) ∪ qual_dom φ ∪ lvars_fv D ->
@@ -1083,8 +863,8 @@ Lemma over_open_body_transport_ret_fvar_result
   wfworld_closed_on ({[x]} : aset) my ->
   world_dom (my : WorldT) = world_dom (m : WorldT) ∪ {[y]} ->
   res_restrict my (world_dom (m : WorldT)) = m ->
-  my ⊨ over_open_body φ y ->
-  m ⊨ over_open_body φ x.
+  my ⊨ over_open_body b φ y ->
+  m ⊨ over_open_body b φ x.
 Proof.
   intros Hφm Hxm Hyfresh Hxφ HD Hres Hclosed_x Hdom_my Hbase Hbody_y.
   assert (Hyφ : y ∉ qual_dom φ) by (clear -Hyfresh; set_solver).
@@ -1093,9 +873,9 @@ Proof.
     Hclosed_x Hdom_my Hbase) as Hproj.
   set (Sy := qual_dom φ ∪ {[y]}).
   set (Sx := qual_dom φ ∪ {[x]}).
-  assert (Hbody_y_restrict : res_restrict my Sy ⊨ over_open_body φ y).
+  assert (Hbody_y_restrict : res_restrict my Sy ⊨ over_open_body b φ y).
   {
-    pose proof (res_models_minimal_on Sy my (over_open_body φ y)
+    pose proof (res_models_minimal_on Sy my (over_open_body b φ y)
       ltac:(subst Sy; apply formula_fv_over_open_body_subset)) as Hmin.
     exact (proj1 Hmin Hbody_y).
   }
@@ -1103,20 +883,20 @@ Proof.
   rewrite Hproj in Hbody_y_restrict.
   assert (Hsw :
       res_atom_swap x y (res_restrict m Sx) ⊨
-      formula_atom_swap x y (over_open_body φ x)).
+      formula_atom_swap x y (over_open_body b φ x)).
   {
     rewrite formula_atom_swap_over_open_body by assumption.
     subst Sx. exact Hbody_y_restrict.
   }
   pose proof (proj1 (res_models_atom_swap (res_restrict m Sx)
-    (over_open_body φ x) x y) Hsw) as Hbody_x_restrict.
-  pose proof (res_models_minimal_on Sx m (over_open_body φ x)
+    (over_open_body b φ x) x y) Hsw) as Hbody_x_restrict.
+  pose proof (res_models_minimal_on Sx m (over_open_body b φ x)
     ltac:(subst Sx; apply formula_fv_over_open_body_subset)) as Hmin_x.
   exact (proj2 Hmin_x Hbody_x_restrict).
 Qed.
 
 Lemma under_open_body_transport_ret_fvar_result
-    D φ x y (m my : WfWorldT) :
+    D b φ x y (m my : WfWorldT) :
   qual_dom φ ⊆ world_dom (m : WorldT) ->
   x ∈ world_dom (m : WorldT) ->
   y ∉ world_dom (m : WorldT) ∪ qual_dom φ ∪ lvars_fv D ->
@@ -1126,8 +906,8 @@ Lemma under_open_body_transport_ret_fvar_result
   wfworld_closed_on ({[x]} : aset) my ->
   world_dom (my : WorldT) = world_dom (m : WorldT) ∪ {[y]} ->
   res_restrict my (world_dom (m : WorldT)) = m ->
-  my ⊨ under_open_body φ y ->
-  m ⊨ under_open_body φ x.
+  my ⊨ under_open_body b φ y ->
+  m ⊨ under_open_body b φ x.
 Proof.
   intros Hφm Hxm Hyfresh Hxφ HD Hres Hclosed_x Hdom_my Hbase Hbody_y.
   assert (Hyφ : y ∉ qual_dom φ) by (clear -Hyfresh; set_solver).
@@ -1136,9 +916,9 @@ Proof.
     Hclosed_x Hdom_my Hbase) as Hproj.
   set (Sy := qual_dom φ ∪ {[y]}).
   set (Sx := qual_dom φ ∪ {[x]}).
-  assert (Hbody_y_restrict : res_restrict my Sy ⊨ under_open_body φ y).
+  assert (Hbody_y_restrict : res_restrict my Sy ⊨ under_open_body b φ y).
   {
-    pose proof (res_models_minimal_on Sy my (under_open_body φ y)
+    pose proof (res_models_minimal_on Sy my (under_open_body b φ y)
       ltac:(subst Sy; apply formula_fv_under_open_body_subset)) as Hmin.
     exact (proj1 Hmin Hbody_y).
   }
@@ -1146,20 +926,20 @@ Proof.
   rewrite Hproj in Hbody_y_restrict.
   assert (Hsw :
       res_atom_swap x y (res_restrict m Sx) ⊨
-      formula_atom_swap x y (under_open_body φ x)).
+      formula_atom_swap x y (under_open_body b φ x)).
   {
     rewrite formula_atom_swap_under_open_body by assumption.
     subst Sx. exact Hbody_y_restrict.
   }
   pose proof (proj1 (res_models_atom_swap (res_restrict m Sx)
-    (under_open_body φ x) x y) Hsw) as Hbody_x_restrict.
-  pose proof (res_models_minimal_on Sx m (under_open_body φ x)
+    (under_open_body b φ x) x y) Hsw) as Hbody_x_restrict.
+  pose proof (res_models_minimal_on Sx m (under_open_body b φ x)
     ltac:(subst Sx; apply formula_fv_under_open_body_subset)) as Hmin_x.
   exact (proj2 Hmin_x Hbody_x_restrict).
 Qed.
 
 Lemma over_open_body_push_ret_fvar_result
-    D φ x y (m my : WfWorldT) :
+    D b φ x y (m my : WfWorldT) :
   qual_dom φ ⊆ world_dom (m : WorldT) ->
   x ∈ world_dom (m : WorldT) ->
   y ∉ world_dom (m : WorldT) ∪ qual_dom φ ∪ lvars_fv D ->
@@ -1169,8 +949,8 @@ Lemma over_open_body_push_ret_fvar_result
   wfworld_closed_on ({[x]} : aset) my ->
   world_dom (my : WorldT) = world_dom (m : WorldT) ∪ {[y]} ->
   res_restrict my (world_dom (m : WorldT)) = m ->
-  m ⊨ over_open_body φ x ->
-  my ⊨ over_open_body φ y.
+  m ⊨ over_open_body b φ x ->
+  my ⊨ over_open_body b φ y.
 Proof.
   intros Hφm Hxm Hyfresh Hxφ HD Hres Hclosed_x Hdom_my Hbase Hbody_x.
   assert (Hyφ : y ∉ qual_dom φ) by (clear -Hyfresh; set_solver).
@@ -1179,31 +959,31 @@ Proof.
     Hclosed_x Hdom_my Hbase) as Hproj.
   set (Sy := qual_dom φ ∪ {[y]}).
   set (Sx := qual_dom φ ∪ {[x]}).
-  assert (Hbody_x_restrict : res_restrict m Sx ⊨ over_open_body φ x).
+  assert (Hbody_x_restrict : res_restrict m Sx ⊨ over_open_body b φ x).
   {
-    pose proof (res_models_minimal_on Sx m (over_open_body φ x)
+    pose proof (res_models_minimal_on Sx m (over_open_body b φ x)
       ltac:(subst Sx; apply formula_fv_over_open_body_subset)) as Hmin.
     exact (proj1 Hmin Hbody_x).
   }
   assert (Hsw :
       res_atom_swap x y (res_restrict m Sx) ⊨
-      formula_atom_swap x y (over_open_body φ x)).
+      formula_atom_swap x y (over_open_body b φ x)).
   {
     apply (proj2 (res_models_atom_swap (res_restrict m Sx)
-      (over_open_body φ x) x y)).
+      (over_open_body b φ x) x y)).
     exact Hbody_x_restrict.
   }
   rewrite formula_atom_swap_over_open_body in Hsw by assumption.
   subst Sx.
   change Sy with (qual_dom φ ∪ {[y]}).
   rewrite <- Hproj in Hsw.
-  pose proof (res_models_minimal_on Sy my (over_open_body φ y)
+  pose proof (res_models_minimal_on Sy my (over_open_body b φ y)
     ltac:(subst Sy; apply formula_fv_over_open_body_subset)) as Hmin_y.
   exact (proj2 Hmin_y Hsw).
 Qed.
 
 Lemma under_open_body_push_ret_fvar_result
-    D φ x y (m my : WfWorldT) :
+    D b φ x y (m my : WfWorldT) :
   qual_dom φ ⊆ world_dom (m : WorldT) ->
   x ∈ world_dom (m : WorldT) ->
   y ∉ world_dom (m : WorldT) ∪ qual_dom φ ∪ lvars_fv D ->
@@ -1213,8 +993,8 @@ Lemma under_open_body_push_ret_fvar_result
   wfworld_closed_on ({[x]} : aset) my ->
   world_dom (my : WorldT) = world_dom (m : WorldT) ∪ {[y]} ->
   res_restrict my (world_dom (m : WorldT)) = m ->
-  m ⊨ under_open_body φ x ->
-  my ⊨ under_open_body φ y.
+  m ⊨ under_open_body b φ x ->
+  my ⊨ under_open_body b φ y.
 Proof.
   intros Hφm Hxm Hyfresh Hxφ HD Hres Hclosed_x Hdom_my Hbase Hbody_x.
   assert (Hyφ : y ∉ qual_dom φ) by (clear -Hyfresh; set_solver).
@@ -1223,25 +1003,25 @@ Proof.
     Hclosed_x Hdom_my Hbase) as Hproj.
   set (Sy := qual_dom φ ∪ {[y]}).
   set (Sx := qual_dom φ ∪ {[x]}).
-  assert (Hbody_x_restrict : res_restrict m Sx ⊨ under_open_body φ x).
+  assert (Hbody_x_restrict : res_restrict m Sx ⊨ under_open_body b φ x).
   {
-    pose proof (res_models_minimal_on Sx m (under_open_body φ x)
+    pose proof (res_models_minimal_on Sx m (under_open_body b φ x)
       ltac:(subst Sx; apply formula_fv_under_open_body_subset)) as Hmin.
     exact (proj1 Hmin Hbody_x).
   }
   assert (Hsw :
       res_atom_swap x y (res_restrict m Sx) ⊨
-      formula_atom_swap x y (under_open_body φ x)).
+      formula_atom_swap x y (under_open_body b φ x)).
   {
     apply (proj2 (res_models_atom_swap (res_restrict m Sx)
-      (under_open_body φ x) x y)).
+      (under_open_body b φ x) x y)).
     exact Hbody_x_restrict.
   }
   rewrite formula_atom_swap_under_open_body in Hsw by assumption.
   subst Sx.
   change Sy with (qual_dom φ ∪ {[y]}).
   rewrite <- Hproj in Hsw.
-  pose proof (res_models_minimal_on Sy my (under_open_body φ y)
+  pose proof (res_models_minimal_on Sy my (under_open_body b φ y)
     ltac:(subst Sy; apply formula_fv_under_open_body_subset)) as Hmin_y.
   exact (proj2 Hmin_y Hsw).
 Qed.
@@ -1251,7 +1031,7 @@ Lemma ty_denote_gas_over_ret_fvar_self_body
   lty_env_closed Σ ->
   z ∉ qual_dom φ ->
   m ⊨ ty_denote_gas (S gas) Σ (CTOver b φ) (tret (vfvar z)) ->
-  m ⊨ over_open_body φ z.
+  m ⊨ over_open_body b φ z.
 Proof.
   intros HΣclosed Hzφ Hden.
   pose proof (ty_denote_gas_guard (S gas) Σ (CTOver b φ)
@@ -1373,7 +1153,7 @@ Lemma ty_denote_gas_under_ret_fvar_self_body
   lty_env_closed Σ ->
   z ∉ qual_dom φ ->
   m ⊨ ty_denote_gas (S gas) Σ (CTUnder b φ) (tret (vfvar z)) ->
-  m ⊨ under_open_body φ z.
+  m ⊨ under_open_body b φ z.
 Proof.
   intros HΣclosed Hzφ Hden.
   pose proof (ty_denote_gas_guard (S gas) Σ (CTUnder b φ)
@@ -1497,7 +1277,7 @@ Lemma ty_denote_gas_over_ret_fvar_self_body_iff
   z ∉ qual_dom φ ->
   m ⊨ ty_denote_gas (S gas) Σ (CTOver b φ) (tret (vfvar z)) <->
   m ⊨ ty_denote_gas 0 Σ (CTOver b φ) (tret (vfvar z)) /\
-  m ⊨ over_open_body φ z.
+  m ⊨ over_open_body b φ z.
 Proof.
   intros HΣclosed Hzφ.
   split.
@@ -1587,7 +1367,7 @@ Proof.
           - exact Hbase_my.
           - exact Hclosed_z_m.
         }
-        assert (Hbody_y : my ⊨ over_open_body φ y).
+        assert (Hbody_y : my ⊨ over_open_body b φ y).
         {
           eapply over_open_body_push_ret_fvar_result.
           + exact Hφm.
@@ -1610,7 +1390,7 @@ Lemma ty_denote_gas_under_ret_fvar_self_body_iff
   z ∉ qual_dom φ ->
   m ⊨ ty_denote_gas (S gas) Σ (CTUnder b φ) (tret (vfvar z)) <->
   m ⊨ ty_denote_gas 0 Σ (CTUnder b φ) (tret (vfvar z)) /\
-  m ⊨ under_open_body φ z.
+  m ⊨ under_open_body b φ z.
 Proof.
   intros HΣclosed Hzφ.
   split.
@@ -1700,7 +1480,7 @@ Proof.
           - exact Hbase_my.
           - exact Hclosed_z_m.
         }
-        assert (Hbody_y : my ⊨ under_open_body φ y).
+        assert (Hbody_y : my ⊨ under_open_body b φ y).
         {
           eapply under_open_body_push_ret_fvar_result.
           + exact Hφm.
@@ -1723,7 +1503,7 @@ Lemma ty_denote_gas_persist_over_ret_fvar_self_body
   z ∉ qual_dom φ ->
   m ⊨ ty_denote_gas (S (S gas)) Σ
     (CTPersist (CTOver b φ)) (tret (vfvar z)) ->
-  m ⊨ over_open_body φ z.
+  m ⊨ over_open_body b φ z.
 Proof.
   intros HΣclosed Hzφ Hden.
   pose proof (ty_denote_gas_guard (S (S gas)) Σ

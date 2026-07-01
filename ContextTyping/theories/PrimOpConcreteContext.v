@@ -6,7 +6,8 @@
     primitives take a unit argument; their graph relation enumerates all
     boolean or natural results. *)
 
-From CoreLang Require Import BasicTyping BasicTypingProps SmallStep StrongNormalization.
+From CoreLang Require Import BasicTyping BasicTypingProps SmallStep
+  OperationalProps StrongNormalization.
 From ContextBase Require Import BaseTactics.
 From ContextLogic Require Import FormulaSemantics.
 From ContextTypeLanguage Require Import WF.
@@ -169,6 +170,67 @@ Definition concrete_primop_sig (op : prim_op) : primop_sig :=
   end.
 
 Definition concrete_Φ : primop_ctx := concrete_primop_sig.
+
+Local Lemma expr_eval_prim_fvar_result_has_ltype op x σ v :
+  expr_eval_in_store σ (tprim op (vfvar x)) v ->
+  basic_value_has_ltype ∅ v (TBase (prim_ret_base (concrete_Φ op))).
+Proof.
+  unfold expr_eval_in_store, lstore_instantiate_tm.
+  cbn [lstore_instantiate_tm_at lstore_instantiate_tm_split_at
+    lstore_instantiate_value_at lstore_instantiate_value_split_at].
+  destruct (lstore_free_part σ !! x) as [vx|] eqn:Hx.
+  - destruct vx; intros Hsteps.
+    all: try (exfalso;
+      destruct (steps_inv _ _ Hsteps) as [[Heq _]|[e' [Hstep _]]];
+      [discriminate|inversion Hstep; subst; inversion H; subst; discriminate]).
+    apply reduction_prim_const in Hsteps as [c' [Hstep ->]].
+    inversion Hstep; subst; simpl; constructor.
+  - intros Hsteps.
+    exfalso.
+    destruct (steps_inv _ _ Hsteps) as [[Heq _]|[e' [Hstep _]]].
+    + discriminate.
+    + inversion Hstep; subst; inversion H; subst; discriminate.
+Qed.
+
+Local Lemma typed_result_qual_prim_fvar_eq op x :
+  typed_result_qual (prim_ret_base (concrete_Φ op))
+    (expr_result_qual (tprim op (vfvar x)) (LVBound 0)) =
+  expr_result_qual (tprim op (vfvar x)) (LVBound 0).
+Proof.
+  apply qual_ext.
+  - unfold typed_result_qual, expr_result_qual.
+    cbn [qual_lvars qual_vars tm_lvars tm_lvars_at value_lvars_at].
+    set_solver.
+  - intros [s1 Hdom1] [s2 Hdom2] Hs.
+    cbn [lso_store storeAO_store] in Hs.
+    unfold typed_result_qual, expr_result_qual.
+    cbn [qual_prop qual_lvars qual_vars lso_store storeAO_store].
+    split.
+    + intros [Hres _].
+      destruct Hres as [Hfresh [v [Hlookup Heval]]].
+      split; [exact Hfresh|].
+      exists v. split.
+      * unfold lstore_on_restrict, storeA_on_restrict in Hlookup.
+        cbn [lso_store storeAO_store] in Hlookup.
+        apply storeA_restrict_lookup_some in Hlookup as [_ Hlookup].
+        rewrite Hs in Hlookup. exact Hlookup.
+      * apply (proj1 (expr_eval_in_store_restrict_lvars
+          (tprim op (vfvar x)) s1
+          (tm_lvars (tprim op (vfvar x)) ∪ {[LVBound 0]}) v
+          ltac:(set_solver))) in Heval.
+        rewrite Hs in Heval. exact Heval.
+    + intros Hres.
+      split.
+      * unfold lstore_on_restrict, storeA_on_restrict.
+        cbn [lso_store storeAO_store].
+        rewrite Hs.
+        apply expr_result_at_store_restrict_lvars; [set_solver|exact Hres].
+      * destruct Hres as [_ [v [Hlookup Heval]]].
+        exists v. split.
+        -- rewrite Hs. exact Hlookup.
+        -- eapply expr_eval_prim_fvar_result_has_ltype.
+           exact Heval.
+Qed.
 
 Lemma primop_result_ty_eq op :
   primop_result_ty (concrete_Φ op) =
@@ -688,10 +750,12 @@ Qed.
 
 Lemma ty_denote_gas_over_self_result_qual
     gas b Σ e (m : WfWorldT) :
+  typed_result_qual b (expr_result_qual e (LVBound 0)) =
+    expr_result_qual e (LVBound 0) ->
   m ⊨ ty_denote_gas 0 Σ (CTOver b (expr_result_qual e (LVBound 0))) e ->
   m ⊨ ty_denote_gas gas Σ (CTOver b (expr_result_qual e (LVBound 0))) e.
 Proof.
-  destruct gas as [|gas']; intros Hzero; [exact Hzero|].
+  destruct gas as [|gas']; intros Htyped_eq Hzero; [exact Hzero|].
   cbn [ty_denote_gas].
   rewrite res_models_and_iff.
   split.
@@ -732,62 +796,40 @@ Proof.
     {
       intros Hyin. apply HyD. apply lvars_fv_elem. exact Hyin.
     }
-    assert (Hye : y ∉ fv_tm e) by set_solver.
-    eapply res_models_impl_intro.
-    { exact Hscope_open. }
+	    assert (Hye : y ∉ fv_tm e) by set_solver.
+	    rewrite Htyped_eq in Hscope_open |- *.
+	    rewrite !formula_open_impl in Hscope_open |- *.
+	    rewrite formula_open_over_self_body_normalize in Hscope_open |- *.
+	    2:{ unfold expr_result_qual; cbn [qual_vars qual_lvars]. set_solver. }
+	    2:{ unfold expr_result_qual; cbn [qual_vars qual_lvars]. set_solver. }
+	    rewrite qual_open_expr_result_qual_bound0 in Hscope_open |- *
+	      by (exact Hlce || set_solver).
+	    eapply res_models_impl_intro.
+	    { exact Hscope_open. }
     intros Hres.
     change (my ⊨ formula_open 0 y
       (expr_result_formula_at
         (lvars_shift_from 0 (dom (relevant_env Σ
           (CTOver b (expr_result_qual e (LVBound 0))) e)))
         (tm_shift 0 e) (LVBound 0))) in Hres.
-    rewrite (formula_open_result_first_expr_result_formula_at_shift0
-      y (dom (relevant_env Σ
-        (CTOver b (expr_result_qual e (LVBound 0))) e)) e
-      HlcD HyD Hlce Hye) in Hres.
-	    fold_over_result_body_in_goal.
-	    try rewrite formula_open_fibvars.
-	    try rewrite formula_open_over_result_body.
-	    repeat fold_result_basic_typing_formula_open.
-	    try rewrite formula_open_result_basic_typing_formula.
-	    rewrite qual_open_expr_result_qual_bound0 by (exact Hlce || set_solver).
-	    replace (set_swap (LVBound 0) (LVFree y)
-	        (qual_vars (expr_result_qual e (LVBound 0)) ∖ {[LVBound 0]}))
-	      with (qual_vars (expr_result_qual e (LVFree y)) ∖ {[LVFree y]}).
-	    2:{
-	      rewrite lvars_open_difference_bound.
-	      rewrite <- qual_open_atom_vars.
-	      rewrite qual_open_expr_result_qual_bound0 by (exact Hlce || set_solver).
-	      reflexivity.
-	    }
-	    assert (Hold : my ⊨ over_open_body
-	        (expr_result_qual e (LVBound 0)) y).
-	    {
-	      unfold over_open_body.
-	      rewrite qual_open_expr_result_qual_bound0 by (exact Hlce || set_solver).
-	      eapply (expr_result_formula_at_self_over_body
-	        (dom (relevant_env Σ
-	          (CTOver b (expr_result_qual e (LVBound 0))) e)) e y my);
-	        [exact HeD | exact HyDlv | exact Hres].
-	    }
-	    pose proof (over_open_body_to_typed b
-	      (expr_result_qual e (LVBound 0)) y my Hiny Hold) as Htyped.
-	    fold_over_result_body_in_goal.
-	    try rewrite formula_open_fibvars in Htyped.
-	    try rewrite formula_open_over_result_body in Htyped.
-	    repeat fold_result_basic_typing_formula_open.
-	    try rewrite formula_open_result_basic_typing_formula in Htyped.
-	    rewrite qual_open_expr_result_qual_bound0 in Htyped by (exact Hlce || set_solver).
-	    rewrite <- formula_open_result_basic_typing_formula in Htyped.
-	    exact Htyped.
+	    rewrite (formula_open_result_first_expr_result_formula_at_shift0
+	      y (dom (relevant_env Σ
+	        (CTOver b (expr_result_qual e (LVBound 0))) e)) e
+	      HlcD HyD Hlce Hye) in Hres.
+	    eapply (expr_result_formula_at_self_over_body
+	      (dom (relevant_env Σ
+	        (CTOver b (expr_result_qual e (LVBound 0))) e)) e y my);
+	      [exact HeD | exact HyDlv | exact Hres].
 Qed.
 
 Lemma ty_denote_gas_under_self_result_qual
     gas b Σ e (m : WfWorldT) :
+  typed_result_qual b (expr_result_qual e (LVBound 0)) =
+    expr_result_qual e (LVBound 0) ->
   m ⊨ ty_denote_gas 0 Σ (CTUnder b (expr_result_qual e (LVBound 0))) e ->
   m ⊨ ty_denote_gas gas Σ (CTUnder b (expr_result_qual e (LVBound 0))) e.
 Proof.
-  destruct gas as [|gas']; intros Hzero; [exact Hzero|].
+  destruct gas as [|gas']; intros Htyped_eq Hzero; [exact Hzero|].
   cbn [ty_denote_gas].
   rewrite res_models_and_iff.
   split.
@@ -827,55 +869,31 @@ Proof.
       (CTUnder b (expr_result_qual e (LVBound 0))) e)).
     {
       intros Hyin. apply HyD. apply lvars_fv_elem. exact Hyin.
-    }
-    assert (Hye : y ∉ fv_tm e) by set_solver.
-    eapply res_models_impl_intro.
-    { exact Hscope_open. }
+	    }
+	    assert (Hye : y ∉ fv_tm e) by set_solver.
+	    rewrite Htyped_eq in Hscope_open |- *.
+	    rewrite !formula_open_impl in Hscope_open |- *.
+	    rewrite formula_open_under_self_body_normalize in Hscope_open |- *.
+	    2:{ unfold expr_result_qual; cbn [qual_vars qual_lvars]. set_solver. }
+	    2:{ unfold expr_result_qual; cbn [qual_vars qual_lvars]. set_solver. }
+	    rewrite qual_open_expr_result_qual_bound0 in Hscope_open |- *
+	      by (exact Hlce || set_solver).
+	    eapply res_models_impl_intro.
+	    { exact Hscope_open. }
     intros Hres.
     change (my ⊨ formula_open 0 y
       (expr_result_formula_at
         (lvars_shift_from 0 (dom (relevant_env Σ
           (CTUnder b (expr_result_qual e (LVBound 0))) e)))
         (tm_shift 0 e) (LVBound 0))) in Hres.
-    rewrite (formula_open_result_first_expr_result_formula_at_shift0
-      y (dom (relevant_env Σ
-        (CTUnder b (expr_result_qual e (LVBound 0))) e)) e
-      HlcD HyD Hlce Hye) in Hres.
-	    fold_under_result_body_in_goal.
-	    try rewrite formula_open_fibvars.
-	    try rewrite formula_open_under_result_body.
-	    repeat fold_result_basic_typing_formula_open.
-	    try rewrite formula_open_result_basic_typing_formula.
-	    rewrite qual_open_expr_result_qual_bound0 by (exact Hlce || set_solver).
-	    replace (set_swap (LVBound 0) (LVFree y)
-	        (qual_vars (expr_result_qual e (LVBound 0)) ∖ {[LVBound 0]}))
-	      with (qual_vars (expr_result_qual e (LVFree y)) ∖ {[LVFree y]}).
-	    2:{
-	      rewrite lvars_open_difference_bound.
-	      rewrite <- qual_open_atom_vars.
-	      rewrite qual_open_expr_result_qual_bound0 by (exact Hlce || set_solver).
-	      reflexivity.
-	    }
-	    assert (Hold : my ⊨ under_open_body
-	        (expr_result_qual e (LVBound 0)) y).
-	    {
-	      unfold under_open_body.
-	      rewrite qual_open_expr_result_qual_bound0 by (exact Hlce || set_solver).
-	      eapply (expr_result_formula_at_self_under_body
-	        (dom (relevant_env Σ
-	          (CTUnder b (expr_result_qual e (LVBound 0))) e)) e y my);
-	        [exact HeD | exact HyDlv | exact Hres].
-	    }
-	    pose proof (under_open_body_to_typed b
-	      (expr_result_qual e (LVBound 0)) y my Hiny Hold) as Htyped.
-	    fold_under_result_body_in_goal.
-	    try rewrite formula_open_fibvars in Htyped.
-	    try rewrite formula_open_under_result_body in Htyped.
-	    repeat fold_result_basic_typing_formula_open.
-	    try rewrite formula_open_result_basic_typing_formula in Htyped.
-	    rewrite qual_open_expr_result_qual_bound0 in Htyped by (exact Hlce || set_solver).
-	    rewrite <- formula_open_result_basic_typing_formula in Htyped.
-	    exact Htyped.
+	    rewrite (formula_open_result_first_expr_result_formula_at_shift0
+	      y (dom (relevant_env Σ
+	        (CTUnder b (expr_result_qual e (LVBound 0))) e)) e
+	      HlcD HyD Hlce Hye) in Hres.
+	    eapply (expr_result_formula_at_self_under_body
+	      (dom (relevant_env Σ
+	        (CTUnder b (expr_result_qual e (LVBound 0))) e)) e y my);
+	      [exact HeD | exact HyDlv | exact Hres].
 Qed.
 
 Lemma primop_graph_qual_open_arg op x :
@@ -929,109 +947,112 @@ Qed.
 
 Lemma ty_denote_gas_precise_self_result_qual
     gas b Σ e (m : WfWorldT) :
+  typed_result_qual b (expr_result_qual e (LVBound 0)) =
+    expr_result_qual e (LVBound 0) ->
   m ⊨ ty_denote_gas 0 Σ (precise_ty b (expr_result_qual e (LVBound 0))) e ->
   m ⊨ ty_denote_gas gas Σ (precise_ty b (expr_result_qual e (LVBound 0))) e.
 Proof.
-  destruct gas as [|gas']; intros Hzero; [exact Hzero|].
+  destruct gas as [|gas']; intros Htyped_eq Hzero; [exact Hzero|].
   unfold precise_ty, over_ty, under_ty in *.
   cbn [ty_denote_gas].
   rewrite res_models_and_iff.
   split.
   - apply ty_denote_gas_guard_formula with (gas := 0). exact Hzero.
   - rewrite res_models_and_iff.
-    split.
-    + apply ty_denote_gas_over_self_result_qual.
-      eapply ty_denote_gas_zero_inter_l. exact Hzero.
-    + apply ty_denote_gas_under_self_result_qual.
-      eapply ty_denote_gas_zero_inter_r. exact Hzero.
+	    split.
+	    + apply ty_denote_gas_over_self_result_qual.
+	      exact Htyped_eq.
+	      eapply ty_denote_gas_zero_inter_l. exact Hzero.
+	    + apply ty_denote_gas_under_self_result_qual.
+	      exact Htyped_eq.
+	      eapply ty_denote_gas_zero_inter_r. exact Hzero.
 Qed.
 
-Local Lemma topq_over_open_body y (m : WfWorldT) :
+Local Lemma topq_over_open_body b y (m : WfWorldT) :
+  (forall ρ, (m : WorldT) ρ ->
+    exists v, ρ !! y = Some v /\
+      basic_value_has_ltype ∅ v (TBase b)) ->
   y ∈ world_dom (m : WorldT) ->
-  m ⊨ over_open_body topq y.
+  m ⊨ over_open_body b topq y.
 Proof.
-  intros Hym.
-  unfold over_open_body, topq, qual_top, qual_top_on.
-  cbn [qual_open_atom qual_vars qual_lvars].
-  replace ({[LVFree y]} ∖ {[LVFree y]} : lvset)
-    with (∅ : lvset) by set_solver.
-  apply res_models_FFibVars_iff.
-  split.
+  intros Hytyped Hym.
+  unfold over_open_body.
+  replace (qual_vars (qual_open_atom 0 y topq) ∖ {[LVFree y]})
+    with (∅ : lvset).
+  2:{
+    rewrite qual_open_atom_vars.
+    unfold topq, qual_top, qual_top_on.
+    cbn [qual_vars qual_lvars].
+    rewrite set_swap_singleton. base_swap_normalize. set_solver.
+  }
+  apply res_models_fibvars_empty_intro.
+  apply res_models_over_FAtom_intro_store_holds.
   - unfold formula_scoped_in_world.
-    rewrite formula_fv_fibvars, formula_fv_over, formula_fv_atom.
-    cbn [qual_dom qual_vars qual_lvars].
-    base_swap_normalize.
-    replace ({[LVFree y]} ∖ {[LVFree y]} : lvset)
-      with (∅ : lvset) by set_solver.
-    rewrite lvars_fv_empty, lvars_fv_singleton_free.
+    rewrite formula_fv_over, formula_fv_atom.
+    intros a Ha.
+    pose proof (qual_open_atom_dom_subset 0 y (typed_result_qual b topq))
+      as Hsub.
+    apply Hsub in Ha.
+    unfold typed_result_qual, topq, qual_top, qual_top_on, qual_dom in Ha.
+    cbn [qual_vars qual_lvars] in Ha.
+    rewrite lvars_fv_union, lvars_fv_singleton_bound in Ha.
     set_solver.
-  - split.
-    + unfold lc_lvars.
+  - intros ρ Hρ.
+    destruct (Hytyped ρ Hρ) as [vy [Hyv Hvy]].
+    unfold qualifier_holds_store.
+    assert (Hlc_typed_top :
+      lc_lvars (qual_vars (qual_open_atom 0 y (typed_result_qual b topq)))).
+    {
+      rewrite qual_open_atom_vars.
+      unfold typed_result_qual, topq, qual_top, qual_top_on.
+      cbn [qual_vars qual_lvars].
+      rewrite set_swap_union, !set_swap_singleton.
       base_swap_normalize.
-      replace ({[LVFree y]} ∖ {[LVFree y]} : lvset)
-        with (∅ : lvset) by set_solver.
-      intros v Hv. rewrite elem_of_empty in Hv. contradiction.
-    + intros σ mfib Hproj.
-      apply res_models_over_FAtom_intro_store_holds.
-      * unfold formula_scoped_in_world.
-        rewrite formula_fv_over, formula_fv_atom.
-        cbn [qual_dom qual_vars qual_lvars qual_msubst_store].
-        base_swap_normalize.
-        assert (Hproj0 : res_fiber_from_projection m (∅ : aset) σ mfib).
-        { replace (∅ : aset) with
-            (lvars_fv ({[LVFree y]} ∖ {[LVFree y]} : lvset)).
-          - exact Hproj.
-          - base_swap_normalize.
-            replace ({[LVFree y]} ∖ {[LVFree y]} : lvset)
-              with (∅ : lvset) by set_solver.
-            rewrite lvars_fv_empty. reflexivity. }
-        rewrite (res_fiber_from_projection_world_dom m mfib ∅ σ Hproj0).
-        cbn [qual_mlsubst qual_vars].
-        rewrite dom_lstore_lift_free.
-        unfold qual_vars. cbn [qual_lvars].
-        rewrite lvars_fv_difference_atoms, lvars_fv_singleton_free.
-        set_solver.
-      * intros ρ Hρ.
-        assert (Hproj0 : res_fiber_from_projection m (∅ : aset) σ mfib).
-        { replace (∅ : aset) with
-            (lvars_fv
-              (set_swap (LVBound 0) (LVFree y) {[LVBound 0]} ∖ {[LVFree y]})).
-          - exact Hproj.
-          - base_swap_normalize.
-            replace ({[LVFree y]} ∖ {[LVFree y]} : lvset)
-              with (∅ : lvset) by set_solver.
-            rewrite lvars_fv_empty. reflexivity. }
-        unfold qualifier_holds_store.
-        cbn [qual_mlsubst qual_lvars qual_prop].
-        rewrite dom_lstore_lift_free.
-        repeat eexists.
-        -- intros v Hv.
-           apply elem_of_difference in Hv as [Hv _].
-           rewrite set_swap_singleton in Hv.
-           rewrite swap_l in Hv.
-           apply elem_of_singleton in Hv. subst. exact I.
-        -- base_swap_normalize.
-           rewrite lvars_fv_difference_atoms, lvars_fv_singleton_free.
-           intros a Ha.
-           apply elem_of_difference in Ha as [Ha _].
-           apply elem_of_singleton in Ha. subst a.
-           change (y ∈ dom (ρ : StoreT)).
-           pose proof (wfworld_store_dom mfib ρ Hρ) as Hdomρ.
-           change (dom (ρ : StoreT) = world_dom (mfib : WorldT)) in Hdomρ.
-           rewrite Hdomρ.
-           rewrite (res_fiber_from_projection_world_dom m mfib ∅ σ Hproj0).
-           exact Hym.
+      intros v Hv. destruct v as [k|a]; [exfalso; set_solver|exact I].
+    }
+    assert (Hsub_typed_top :
+      lvars_fv (qual_vars (qual_open_atom 0 y (typed_result_qual b topq))) ⊆
+        dom (ρ : StoreT)).
+    {
+      rewrite qual_open_atom_vars.
+      unfold typed_result_qual, topq, qual_top, qual_top_on.
+      cbn [qual_vars qual_lvars].
+      rewrite set_swap_union, !set_swap_singleton.
+      base_swap_normalize.
+		      rewrite lvars_fv_union, !lvars_fv_singleton_free.
+		      intros a Ha.
+		      assert (a = y) by set_solver. subst a.
+          change (y ∈ dom (ρ : gmap atom value)).
+          by apply elem_of_dom_2 in Hyv.
+		    }
+    exists Hlc_typed_top, Hsub_typed_top.
+    cbn [qual_open_atom qual_prop typed_result_qual qual_vars qual_lvars].
+    split; [exact I|].
+    exists vy. split; [|exact Hvy].
+    unfold lstore_on_open_back, lstore_on_lift_store.
+    cbn [lso_store storeAO_store].
+    rewrite lstore_swap_lookup_inv_value.
+    base_swap_normalize.
+    apply storeA_restrict_lookup_some_2.
+    + rewrite lstore_lift_free_lookup_free. exact Hyv.
+    + unfold topq, qual_top, qual_top_on.
+      cbn [qual_vars qual_lvars].
+      rewrite set_swap_singleton. base_swap_normalize.
+      set_solver.
 Qed.
 
 Local Lemma topq_over_typed_body y b (m : WfWorldT) :
-  y ∈ world_dom (m : WorldT) ->
+	  y ∈ world_dom (m : WorldT) ->
+  (forall ρ, (m : WorldT) ρ ->
+    exists v, ρ !! y = Some v /\
+      basic_value_has_ltype ∅ v (TBase b)) ->
   m ⊨ FFibVars
     (qual_vars (qual_open_atom 0 y topq) ∖ {[LVFree y]})
     (formula_open 0 y (over_result_body b topq)).
 Proof.
-  intros Hy.
+  intros Hy Hytyped.
   apply over_open_body_to_typed; [exact Hy|].
-  apply topq_over_open_body. exact Hy.
+  apply topq_over_open_body; [exact Hytyped|exact Hy].
 Qed.
 
 Lemma ty_denote_gas_over_top_from_zero
@@ -1049,13 +1070,13 @@ Proof.
     pose proof (formula_scoped_and_r _ _ _ Hscope_full) as Hscope_forall.
     pose proof (ty_denote_gas_zero_lc_relevant_env
       Σ (CTOver b topq) e m Hzero) as HlcD.
-    pose proof (ty_denote_gas_guard_of_zero
-      Σ (CTOver b topq) e m Hzero) as Hguard.
-    repeat rewrite res_models_and_iff in Hguard.
-    destruct Hguard as [_ [_ [Hbasic _]]].
-    apply expr_basic_typing_formula_models_iff in Hbasic
-      as [_ [_ Hbasic_ty]].
-    pose proof (basic_tm_has_ltype_lc _ _ _ HlcD Hbasic_ty) as Hlce.
+	    pose proof (ty_denote_gas_guard_of_zero
+	      Σ (CTOver b topq) e m Hzero) as Hguard.
+	    repeat rewrite res_models_and_iff in Hguard.
+	    destruct Hguard as [_ [Hworld [Hbasic _]]].
+	    apply expr_basic_typing_formula_models_iff in Hbasic
+	      as [_ [_ Hbasic_ty]].
+	    pose proof (basic_tm_has_ltype_lc _ _ _ HlcD Hbasic_ty) as Hlce.
     eapply res_models_forall_rev_intro; [exact Hscope_forall|].
     exists (lvars_fv (dom (relevant_env Σ (CTOver b topq) e)) ∪ fv_tm e).
     intros y Hy my Hdom Hrestrict.
@@ -1072,24 +1093,105 @@ Proof.
       (expr_result_formula_at
         (lvars_shift_from 0 (dom (relevant_env Σ (CTOver b topq) e)))
         (tm_shift 0 e) (LVBound 0))) in Hres.
-    rewrite (formula_open_result_first_expr_result_formula_at_shift0
-      y (dom (relevant_env Σ (CTOver b topq) e)) e
-      HlcD HyD Hlce Hye) in Hres.
-	    fold_over_result_body_in_goal.
-	    try rewrite formula_open_fibvars.
-	    try rewrite formula_open_over_result_body.
-	    repeat fold_result_basic_typing_formula_open.
-	    try rewrite formula_open_result_basic_typing_formula.
-    replace (set_swap (LVBound 0) (LVFree y)
-        (qual_vars topq ∖ {[LVBound 0]}))
-      with (qual_vars (qual_open_atom 0 y topq) ∖ {[LVFree y]}).
+	    rewrite (formula_open_result_first_expr_result_formula_at_shift0
+	      y (dom (relevant_env Σ (CTOver b topq) e)) e
+	      HlcD HyD Hlce Hye) in Hres.
+	    replace (set_swap (LVBound 0) (LVFree y)
+	        (qual_vars topq ∖ {[LVBound 0]}))
+	      with (qual_vars (qual_open_atom 0 y topq) ∖ {[LVFree y]}).
     2:{
-      rewrite lvars_open_difference_bound.
-      rewrite <- qual_open_atom_vars.
-      reflexivity.
-    }
-	    pose proof (topq_over_typed_body y b my Hiny) as Htop.
-	    exact Htop.
+	      rewrite lvars_open_difference_bound.
+	      rewrite <- qual_open_atom_vars.
+	      reflexivity.
+	    }
+	    assert (Hytyped :
+	        forall ρ, (my : WorldT) ρ ->
+	          exists v, ρ !! y = Some v /\
+	            basic_value_has_ltype ∅ v (TBase b)).
+	    {
+	      intros ρ Hρ.
+	      assert (HeD : tm_lvars e ⊆
+	          dom (relevant_env Σ (CTOver b topq) e)).
+	      {
+	        transitivity (lvars_of_atoms (fv_tm e)).
+	        - apply tm_lvars_lc_subset_atoms_fv.
+	          apply tm_lvars_lc. exact Hlce.
+	        - exact (basic_tm_has_ltype_lvars _ _ _ Hbasic_ty).
+	      }
+	      assert (HyDlv : LVFree y ∉
+	          dom (relevant_env Σ (CTOver b topq) e)).
+	      {
+	        intros Hyin. apply HyD.
+	        apply lvars_fv_elem. exact Hyin.
+	      }
+	      pose proof (expr_result_formula_at_models_elim
+	        (dom (relevant_env Σ (CTOver b topq) e)) e y my
+	        HeD HyDlv Hres ρ Hρ)
+	        as Hstore.
+	      destruct Hstore as [_ [v [Hylook Heval]]].
+	      change (((lstore_lift_free ρ : LStoreT) : gmap logic_var value)
+	        !! LVFree y = Some v) in Hylook.
+	      rewrite lstore_lift_free_lookup_free in Hylook.
+	      exists v. split; [exact Hylook|].
+	      apply basic_value_has_ltype_of_empty_atom_typing.
+	      pose proof (res_models_kripke m my
+	        (basic_world_formula (relevant_env Σ (CTOver b topq) e))
+	        (res_le_of_projection_eq _ _ Hrestrict) Hworld) as Hworld_my.
+	      apply basic_world_formula_models_iff in Hworld_my
+	        as [HlcRel [HdomRel HtypedRel]].
+	      unfold lworld_has_type, worldA_has_type in HtypedRel.
+	      destruct HtypedRel as [_ Hstores_typed].
+	      pose proof (Hstores_typed (lstore_lift_free ρ)
+	        ltac:(exists ρ; split; [exact Hρ|reflexivity]))
+	        as Hρ_ltyped.
+		      eapply basic_tm_eval_value_type
+		        with (Σ := relevant_env Σ (CTOver b topq) e)
+		             (σ := store_restrict ρ
+		                (lvars_fv (dom (relevant_env Σ (CTOver b topq) e))))
+		             (e := e)
+		             (T := TBase b).
+	      - exact HlcRel.
+	      - intros x vx Hxv.
+	        apply storeA_restrict_lookup_some in Hxv as [HxRel Hρx].
+	        apply lvars_fv_elem in HxRel.
+	        apply elem_of_dom in HxRel as [Tx HΣx].
+	        exists Tx. split; [exact HΣx|].
+	        eapply Hρ_ltyped; [exact HΣx|].
+	        change (((lstore_lift_free ρ : LStoreT) : gmap logic_var value)
+	          !! LVFree x = Some vx).
+	        rewrite lstore_lift_free_lookup_free. exact Hρx.
+	      - exact Hbasic_ty.
+	      - unfold tm_eval_in_store.
+	        eapply (proj1 (expr_eval_in_store_restrict_lvars e
+	          (lstore_lift_free
+	            (store_restrict ρ
+	              (lvars_fv (dom (relevant_env Σ (CTOver b topq) e)))) : LStoreT)
+	          (dom (relevant_env Σ (CTOver b topq) e)) v HeD)).
+	        rewrite (ContextBasicDenotation.TermEval.lstore_lift_free_restrict_fv_lvars_eq
+	          ρ (dom (relevant_env Σ (CTOver b topq) e)) HlcRel).
+	        eapply (proj2 (expr_eval_in_store_restrict_lvars e
+	          (lstore_lift_free ρ : LStoreT)
+	          (dom (relevant_env Σ (CTOver b topq) e)) v HeD)).
+	        exact Heval.
+	      - intros x Hx.
+	        change (x ∈ dom
+	          (store_restrict ρ
+		            (lvars_fv (dom (relevant_env Σ (CTOver b topq) e))) :
+		            gmap atom value)).
+		        rewrite storeA_restrict_dom.
+		        apply elem_of_intersection. split.
+		        + rewrite (wfworld_store_dom my ρ Hρ).
+			          apply HdomRel.
+			          apply lvars_fv_elem.
+			          apply (basic_tm_has_ltype_lvars _ _ _ Hbasic_ty).
+		          unfold lvars_of_atoms. apply elem_of_map.
+		          exists x. split; [reflexivity|exact Hx].
+		        + apply lvars_fv_elem.
+		          apply (basic_tm_has_ltype_lvars _ _ _ Hbasic_ty).
+		          unfold lvars_of_atoms. apply elem_of_map.
+		          exists x. split; [reflexivity|exact Hx].
+	    }
+	    exact (topq_over_typed_body y b my Hiny Hytyped).
 Qed.
 
 Lemma over_top_denotation_gas gas b Σ e (m : WfWorldT) :
@@ -1218,21 +1320,26 @@ Proof.
   pose proof (primop_opened_result_guard_formula op x m Hctx) as Hguard.
   rewrite primop_result_ty_open_eq in Hguard.
   destruct op; cbn [cty_depth].
-  - rewrite primop_graph_qual_open_arg in Hguard |- *.
-    apply ty_denote_gas_precise_self_result_qual.
-    apply ty_denote_gas_zero_of_guard_formula. exact Hguard.
-  - rewrite primop_graph_qual_open_arg in Hguard |- *.
-    apply ty_denote_gas_precise_self_result_qual.
-    apply ty_denote_gas_zero_of_guard_formula. exact Hguard.
-  - rewrite primop_graph_qual_open_arg in Hguard |- *.
-    apply ty_denote_gas_precise_self_result_qual.
-    apply ty_denote_gas_zero_of_guard_formula. exact Hguard.
-  - rewrite primop_graph_qual_open_arg in Hguard |- *.
-    apply ty_denote_gas_precise_self_result_qual.
-    apply ty_denote_gas_zero_of_guard_formula. exact Hguard.
-  - rewrite primop_graph_qual_open_arg in Hguard |- *.
-    apply ty_denote_gas_precise_self_result_qual.
-    apply ty_denote_gas_zero_of_guard_formula. exact Hguard.
+	  - rewrite primop_graph_qual_open_arg in Hguard |- *.
+	    apply ty_denote_gas_precise_self_result_qual.
+	    apply typed_result_qual_prim_fvar_eq.
+	    apply ty_denote_gas_zero_of_guard_formula. exact Hguard.
+	  - rewrite primop_graph_qual_open_arg in Hguard |- *.
+	    apply ty_denote_gas_precise_self_result_qual.
+	    apply typed_result_qual_prim_fvar_eq.
+	    apply ty_denote_gas_zero_of_guard_formula. exact Hguard.
+	  - rewrite primop_graph_qual_open_arg in Hguard |- *.
+	    apply ty_denote_gas_precise_self_result_qual.
+	    apply typed_result_qual_prim_fvar_eq.
+	    apply ty_denote_gas_zero_of_guard_formula. exact Hguard.
+	  - rewrite primop_graph_qual_open_arg in Hguard |- *.
+	    apply ty_denote_gas_precise_self_result_qual.
+	    apply typed_result_qual_prim_fvar_eq.
+	    apply ty_denote_gas_zero_of_guard_formula. exact Hguard.
+	  - rewrite primop_graph_qual_open_arg in Hguard |- *.
+	    apply ty_denote_gas_precise_self_result_qual.
+	    apply typed_result_qual_prim_fvar_eq.
+	    apply ty_denote_gas_zero_of_guard_formula. exact Hguard.
 Qed.
 
 Lemma primop_result_denotation_arg_world

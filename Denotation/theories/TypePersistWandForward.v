@@ -14,7 +14,7 @@ Lemma ty_denote_gas_over_ret_fvar_fiber_stable
     (my mfib : WfWorldT) :
   lty_env_closed Σ ->
   y ∉ qual_dom φ ->
-  formula_fv (over_open_body φ y) ⊆ X ->
+  formula_fv (over_open_body b φ y) ⊆ X ->
   res_fiber_from_projection my X σ mfib ->
   my ⊨ ty_denote_gas (S gas) Σ (CTOver b φ) (tret (vfvar y)) ->
   mfib ⊨ ty_denote_gas (S gas) Σ (CTOver b φ) (tret (vfvar y)).
@@ -156,13 +156,13 @@ Proof.
            apply Hr. clear -HrDfv. set_solver.
 	        -- exact Hproj.
 	        -- exact Hres.
-	      * change (FOver (FAnd (FAtom φ)
-	            (expr_basic_typing_formula
-	              (typed_lty_env_bind ∅ (TBase b))
-	              (tret (vbvar 0)) (TBase b))))
-	          with (over_result_body b φ).
-	        rewrite formula_open_over_typed_body_normalize.
-	        apply fiberwise_joinable_on_over_open_typed_body.
+	      * change
+            (fiberwise_joinable_on X
+              (formula_open 0 r
+                (FFibVars (qual_vars φ ∖ {[LVBound 0]})
+                  (over_result_body b φ)))).
+          rewrite formula_open_over_typed_body_normalize.
+          apply fiberwise_joinable_on_over_open_typed_body.
         clear -Hr. set_solver.
         intros Hrvars.
         assert (Hrφ : r ∈ qual_dom φ).
@@ -212,13 +212,13 @@ Proof.
            apply Hr. clear -HrDfv. set_solver.
         -- exact Hproj.
         -- exact Hres.
-	      * change (FUnder (FAnd (FAtom φ)
-	            (expr_basic_typing_formula
-	              (typed_lty_env_bind ∅ (TBase b))
-	              (tret (vbvar 0)) (TBase b))))
-	          with (under_result_body b φ).
-	        rewrite formula_open_under_typed_body_normalize.
-	        apply fiberwise_joinable_on_under_open_typed_body.
+	      * change
+            (fiberwise_joinable_on X
+              (formula_open 0 r
+                (FFibVars (qual_vars φ ∖ {[LVBound 0]})
+                  (under_result_body b φ)))).
+          rewrite formula_open_under_typed_body_normalize.
+          apply fiberwise_joinable_on_under_open_typed_body.
         clear -Hr. set_solver.
         intros Hrvars.
         assert (Hrφ : r ∈ qual_dom φ).
@@ -276,7 +276,7 @@ Lemma ty_denote_gas_over_result_body_elim
   mr ⊨ expr_result_formula_at
         (dom (relevant_env Σ (CTOver b φ) e)) e (LVFree r) ->
   m ⊨ ty_denote_gas (S gas) Σ (CTOver b φ) e ->
-  mr ⊨ over_open_body φ r.
+  mr ⊨ over_open_body b φ r.
 Proof.
   intros HΣclosed Hlce Hrm Hre HrΣ Hrφ Hdom Hbase Hres Hden.
   cbn [ty_denote_gas] in Hden.
@@ -304,7 +304,7 @@ Lemma ty_denote_gas_under_result_body_elim
   mr ⊨ expr_result_formula_at
         (dom (relevant_env Σ (CTUnder b φ) e)) e (LVFree r) ->
   m ⊨ ty_denote_gas (S gas) Σ (CTUnder b φ) e ->
-  mr ⊨ under_open_body φ r.
+  mr ⊨ under_open_body b φ r.
 Proof.
   intros HΣclosed Hlce Hrm Hre HrΣ Hrφ Hdom Hbase Hres Hden.
   cbn [ty_denote_gas] in Hden.

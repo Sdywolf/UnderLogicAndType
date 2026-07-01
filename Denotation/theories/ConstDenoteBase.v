@@ -195,6 +195,35 @@ Proof.
   set_solver.
 Qed.
 
+Lemma typed_result_qual_const_eq c :
+  typed_result_qual (base_ty_of_const c)
+    (mk_q_eq (vbvar 0) (vconst c)) =
+  mk_q_eq (vbvar 0) (vconst c).
+Proof.
+  apply qual_ext.
+  - unfold typed_result_qual.
+    cbn [qual_lvars qual_vars].
+    rewrite const_qual_vars_bound. set_solver.
+  - intros [s1 Hdom1] [s2 Hdom2] Hs.
+    cbn [lso_store storeAO_store] in Hs.
+    unfold typed_result_qual, mk_q_eq.
+    cbn [qual_prop qual_lvars qual_vars lvar_value_keys
+      denote_lvar_value lso_store storeAO_store].
+    split.
+    + intros [Heq _].
+      unfold lstore_on_restrict, storeA_on_restrict in Heq.
+      cbn [lso_store storeAO_store] in Heq.
+      apply storeA_restrict_lookup_some in Heq as [_ Heq].
+      rewrite Hs in Heq. exact Heq.
+    + intros Heq.
+      split.
+      * apply storeA_restrict_lookup_some_2;
+          [rewrite Hs; exact Heq|set_solver].
+      * exists (vconst c). split.
+        -- rewrite Hs. exact Heq.
+        -- constructor.
+Qed.
+
 Lemma const_qual_bound_no_free c y :
   LVFree y ∉ qual_vars (mk_q_eq (vbvar 0) (vconst c)).
 Proof.
@@ -602,18 +631,17 @@ Proof.
   }
 		  rewrite (lvars_shift_from_lc_eq 0
 		    (dom (relevant_env Δ τc (tret (vfvar x)))) Hlc_rel) in Hopened.
-		  pose proof (res_models_impl_elim mx _ _ Hopened Hexpr_y)
-		    as Hfib_over.
-		  change (FOver (FAnd (FAtom (mk_q_eq (vbvar 0) (vconst c)))
-		    (expr_basic_typing_formula
-		      (typed_lty_env_bind ∅ (TBase (base_ty_of_const c)))
-		      (tret (vbvar 0)) (TBase (base_ty_of_const c)))))
-		    with (over_result_body (base_ty_of_const c)
-		      (mk_q_eq (vbvar 0) (vconst c))) in Hfib_over.
-		  rewrite formula_open_over_typed_body_normalize in Hfib_over.
-	  2:{ apply const_qual_bound_no_free. }
-  pose proof (over_open_body_from_typed
-    (base_ty_of_const c) (mk_q_eq (vbvar 0) (vconst c)) y mx Hfib_over)
+			  pose proof (res_models_impl_elim mx _ _ Hopened Hexpr_y)
+			    as Hfib_over.
+        change (mx ⊨
+          ((fib (qual_vars (mk_q_eq (vbvar 0) (vconst c)) ∖ {[LVBound 0]})
+            |> over_result_body (base_ty_of_const c)
+                (mk_q_eq (vbvar 0) (vconst c))) ^^ y)%formula)
+          in Hfib_over.
+        rewrite formula_open_over_typed_body_normalize in Hfib_over.
+        2:{ apply const_qual_bound_no_free. }
+	  pose proof (over_open_body_from_typed
+	    (base_ty_of_const c) (mk_q_eq (vbvar 0) (vconst c)) y mx Hfib_over)
     as Hbody_y.
   unfold over_open_body in Hbody_y.
   rewrite const_qual_open_eq in Hbody_y.
@@ -622,11 +650,40 @@ Proof.
         (FOver (FAtom
           (mk_q_eq (vfvar y) (vconst c))))).
   {
-    replace (∅ : lvset)
-      with (qual_vars (mk_q_eq (vfvar y) (vconst c)) ∖
-        {[LVFree y]})
-      by (rewrite const_qual_open_vars; better_set_solver).
-    exact Hbody_y.
+    assert (Hfib_typed_empty :
+        mx ⊨ FFibVars ∅
+          (FOver (FAtom (qual_open_atom 0 y
+            (typed_result_qual (base_ty_of_const c)
+              (mk_q_eq (vbvar 0) (vconst c))))))).
+    {
+      replace (∅ : lvset)
+        with (qual_vars (mk_q_eq (vfvar y) (vconst c)) ∖
+          {[LVFree y]})
+        by (rewrite const_qual_open_vars; better_set_solver).
+      exact Hbody_y.
+    }
+    pose proof (res_models_fibvars_empty_elim mx _ Hfib_typed_empty)
+      as Hover_typed.
+    assert (Hover_plain :
+        mx ⊨ FOver (FAtom (mk_q_eq (vfvar y) (vconst c)))).
+    {
+      eapply res_models_over_FAtom_intro_store_holds.
+      - unfold formula_scoped_in_world.
+        rewrite formula_fv_over, formula_fv_atom.
+	        rewrite const_qual_open_vars, lvars_fv_singleton_free.
+	        intros a Ha.
+	        apply elem_of_singleton in Ha. subst a.
+	        rewrite Hmxdom_forall.
+	        apply elem_of_union_r.
+	        apply elem_of_singleton. reflexivity.
+	      - intros τ Hτ.
+        rewrite <- const_qual_open_eq.
+	        eapply (qualifier_holds_store_typed_result_qual_elim
+          (base_ty_of_const c) (mk_q_eq (vbvar 0) (vconst c)) y τ).
+	        eapply res_models_over_FAtom_store_holds; eauto.
+    }
+    apply res_models_fibvars_empty_intro.
+    exact Hover_plain.
   }
   pose proof (res_models_fibvars_empty_elim mx _ Hfib_empty) as Hover.
   unfold res_models in Hover.

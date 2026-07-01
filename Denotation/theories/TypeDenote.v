@@ -80,11 +80,20 @@ Proof. intros X. apply fiberwise_joinable_on_ty_guard_formula. Qed.
 Definition result_basic_typing_formula (b : base_ty) : FormulaT :=
   FHasType[(∅ ▷ TBase b)%lvar ⊢ (ret # 0)%core ⋮ TBase b].
 
+Definition typed_result_qual (b : base_ty) (φ : type_qualifier) : type_qualifier :=
+  tqual (qual_vars φ ∪ {[LVBound 0]})
+    (fun s =>
+      qual_prop φ
+        (lstore_on_restrict (qual_vars φ) s ltac:(set_solver)) /\
+      exists v,
+        (lso_store s : LStoreT) !! LVBound 0 = Some v /\
+        basic_value_has_ltype (∅ : lty_env) v (TBase b)).
+
 Definition over_result_body (b : base_ty) (φ : type_qualifier) : FormulaT :=
-  (over (@atom φ ∧ result_basic_typing_formula b))%formula.
+  (over (@atom (typed_result_qual b φ)))%formula.
 
 Definition under_result_body (b : base_ty) (φ : type_qualifier) : FormulaT :=
-  (under (@atom φ ∧ result_basic_typing_formula b))%formula.
+  (under (@atom (typed_result_qual b φ)))%formula.
 
 Lemma formula_fv_result_basic_typing_formula b :
   formula_fv (result_basic_typing_formula b) = ∅.
@@ -132,14 +141,12 @@ Fixpoint ty_denote_gas
           (∀.
             FResult[(⇑ₗ (dom Σg))%lvar ⊢ (e ↑)%core ⇓ #ₗ 0] →
             fib (qual_vars φ ∖ {[LVBound 0]}) |>
-              over (@atom φ ∧
-                FHasType[(∅ ▷ TBase b)%lvar ⊢ (ret # 0)%core ⋮ TBase b]))%formula
+              over (@atom (typed_result_qual b φ)))%formula
       | CTUnder b φ =>
           (∀.
             FResult[(⇑ₗ (dom Σg))%lvar ⊢ (e ↑)%core ⇓ #ₗ 0] →
             fib (qual_vars φ ∖ {[LVBound 0]}) |>
-              under (@atom φ ∧
-                FHasType[(∅ ▷ TBase b)%lvar ⊢ (ret # 0)%core ⋮ TBase b]))%formula
+              under (@atom (typed_result_qual b φ)))%formula
       | CTInter τ1 τ2 =>
           (⟦ty τ1 ⟧[Σ, gas'] e ∧
            ⟦ty τ2 ⟧[Σ, gas'] e)%formula

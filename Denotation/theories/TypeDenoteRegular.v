@@ -45,6 +45,124 @@ Proof.
   - apply open_env_values_inj_lift. exact Hinj.
 Qed.
 
+Local Lemma typed_result_qual_open_atom_succ k x b φ :
+  qual_open_atom (S k) x (typed_result_qual b φ) =
+  typed_result_qual b (qual_open_atom (S k) x φ).
+Proof.
+  destruct φ as [D P].
+  unfold typed_result_qual.
+  apply qual_ext; cbn [qual_lvars qual_prop qual_open_atom qual_vars].
+  - rewrite lvars_open_union, set_swap_singleton.
+    apply set_eq. intros v.
+    rewrite !elem_of_union, !elem_of_singleton.
+    unfold swap.
+    repeat destruct decide; subst; try discriminate; tauto.
+  - intros s1 s2 Hs.
+    assert (Hrestrict_store :
+      forall HD HOpen,
+      lso_store (lstore_on_restrict D
+        (lstore_on_open_back (S k) x
+          (D ∪ {[LVBound 0]}) s1) HD) =
+      lso_store (lstore_on_open_back (S k) x D
+        (lstore_on_restrict (lvars_open (S k) x D)
+          s2 HOpen))).
+    {
+      intros HD HOpen.
+      destruct s1 as [σ1 Hσ1].
+      destruct s2 as [σ2 Hσ2].
+      cbn [lso_store storeAO_store] in Hs.
+      subst σ2.
+      unfold lstore_on_restrict, storeA_on_restrict, lstore_on_open_back.
+      cbn [lso_store storeAO_store].
+      unfold lstore_swap, lstore_rekey.
+      rewrite <- (storeA_restrict_rekey
+        (V:=value) (K:=logic_var)
+        (swap (LVBound (S k)) (LVFree x))
+        (swap_inj (LVBound (S k)) (LVFree x))
+        σ1 (lvars_open (S k) x D)).
+      f_equal.
+      symmetry. apply set_swap_involutive.
+    }
+    assert (HP_ext : forall (a b0 : LStoreOn D),
+      lso_store a = lso_store b0 -> P a -> P b0).
+    {
+      intros a b0 Hab HP.
+      replace b0 with a.
+      - exact HP.
+      - apply lstore_on_ext. exact Hab.
+    }
+    assert (Hlookup :
+      (lso_store
+        (lstore_on_open_back (S k) x
+          (D ∪ {[LVBound 0]}) s1) : LStoreT) !! LVBound 0 =
+      (lso_store s2 : LStoreT) !! LVBound 0).
+    {
+      destruct s1 as [σ1 Hσ1].
+      destruct s2 as [σ2 Hσ2].
+      cbn [lso_store storeAO_store] in Hs.
+      subst σ2.
+      cbn [lso_store storeAO_store].
+      unfold lstore_on_open_back. cbn [lso_store storeAO_store].
+      unfold lstore_swap, lstore_rekey.
+      assert (Hswap_lookup : forall (s : LStoreT) z,
+        ((storeA_rekey (swap (LVBound (S k)) (LVFree x)) s : LStoreT) !! z) =
+        (s : LStoreT) !! swap (LVBound (S k)) (LVFree x) z).
+      {
+        intros s z.
+        rewrite <- (storeA_rekey_lookup
+          (V:=value) (K:=logic_var)
+          (swap (LVBound (S k)) (LVFree x))
+          (swap_inj (LVBound (S k)) (LVFree x))
+          s (swap (LVBound (S k)) (LVFree x) z)).
+        rewrite swap_involutive.
+        reflexivity.
+      }
+      rewrite Hswap_lookup.
+      replace (swap (LVBound (S k)) (LVFree x) (LVBound 0)) with
+        (LVBound 0).
+      2:{
+        unfold swap.
+        destruct (decide (LVBound 0 = LVBound (S k))) as [Heq|_];
+          [inversion Heq|].
+        destruct (decide (LVBound 0 = LVFree x)) as [Heq|_];
+          [inversion Heq|].
+        reflexivity.
+      }
+      reflexivity.
+    }
+    split.
+    + intros [Hφ [v [Hvlookup Hvty]]].
+      split.
+      * eapply HP_ext; [apply Hrestrict_store|exact Hφ].
+      * exists v. split; [rewrite <- Hlookup; exact Hvlookup|exact Hvty].
+    + intros [Hφ [v [Hvlookup Hvty]]].
+      split.
+      * eapply HP_ext; [symmetry; apply Hrestrict_store|exact Hφ].
+      * exists v. split; [rewrite Hlookup; exact Hvlookup|exact Hvty].
+Qed.
+
+Local Lemma qual_open_env_typed_result_qual_lift η b φ :
+  open_env_values_inj η ->
+  qual_open_env (kmap S η) (typed_result_qual b φ) =
+  typed_result_qual b (qual_open_env (kmap S η) φ).
+Proof.
+  intros Hinj.
+  induction η as [|k x η Hfresh Hfold IH] using fin_maps.map_fold_ind.
+  - rewrite !kmap_empty, !qual_open_env_empty. reflexivity.
+  - pose proof (open_env_values_inj_insert_inv η k x Hfresh Hinj)
+      as [Hinjη Havoid].
+    rewrite open_env_lift_insert.
+    rewrite !qual_open_env_insert_fresh.
+    + rewrite IH by exact Hinjη.
+      apply typed_result_qual_open_atom_succ.
+    + apply open_env_lift_lookup_none. exact Hfresh.
+    + apply open_env_avoids_atom_lift. exact Havoid.
+    + apply open_env_values_inj_lift. exact Hinjη.
+    + apply open_env_lift_lookup_none. exact Hfresh.
+    + apply open_env_avoids_atom_lift. exact Havoid.
+    + apply open_env_values_inj_lift. exact Hinjη.
+Qed.
+
 Lemma formula_open_env_denot_guard η Σ τ e :
   open_env_fresh_for_lvars η (dom Σ ∪ (context_ty_lvars τ ∪ tm_lvars e)) ->
   open_env_values_inj η ->
@@ -179,28 +297,16 @@ Ltac denot_open_env_qual_case η Hfresh Hinj Σ τcase φ e :=
 	        by (exact Hfresh || exact Hinj);
 	      first [rewrite open_cty_env_over by exact Hinj
 	            |rewrite open_cty_env_under by exact Hinj];
-	      rewrite formula_open_env_fibvars;
-	      [|eapply open_env_fresh_for_lvars_mono; [|exact Hfreshφ]; set_solver];
-	      rewrite open_env_lift_qual_diff_bound0
-	        by exact Hfreshφ;
-	      unfold over_result_body, under_result_body;
-		      first [rewrite formula_open_env_over
-		            |rewrite formula_open_env_under];
-		      rewrite formula_open_env_and;
-		      rewrite formula_open_env_atom;
-		      match goal with
-		      | |- context [
-		            expr_basic_typing_formula
-		              (typed_lty_env_bind ∅ (TBase ?b0))
-		              (tret (vbvar 0)) (TBase ?b0)] =>
-		          change (expr_basic_typing_formula
-		            (typed_lty_env_bind ∅ (TBase b0))
-		            (tret (vbvar 0)) (TBase b0))
-		            with (result_basic_typing_formula b0)
-		      end;
-		      rewrite formula_open_env_lift_result_basic_typing_formula
-		        by exact Hinj;
-		      reflexivity ] ].
+		      rewrite formula_open_env_fibvars;
+		      [|eapply open_env_fresh_for_lvars_mono; [|exact Hfreshφ]; set_solver];
+		      rewrite open_env_lift_qual_diff_bound0
+		        by exact Hfreshφ;
+		      unfold over_result_body, under_result_body;
+			      first [rewrite formula_open_env_over
+			            |rewrite formula_open_env_under];
+			      rewrite formula_open_env_atom;
+			      rewrite qual_open_env_typed_result_qual_lift by exact Hinj;
+			      reflexivity ] ].
 
 Ltac denot_open_env_binary_case IH Hfresh Hinj :=
   cbn [ty_denote_gas];
@@ -328,6 +434,21 @@ Proof.
   change (relevant_lvars (CTWand τx τr) e)
     with (relevant_lvars (CTArrow τx τr) e).
   apply arrow_value_body_lift2_support_subset.
+Qed.
+
+Lemma wand_outer_bind_lift1_support_subset Σ τx τr e :
+  lvars_at_depth 1
+    (dom (typed_lty_env_bind
+      (relevant_env Σ (CTWand τx τr) e)
+      (erase_ty (CTWand τx τr)))) ⊆
+  dom Σ ∪ (context_ty_lvars (CTWand τx τr) ∪ tm_lvars e).
+Proof.
+  rewrite lvars_at_depth_typed_lty_env_bind.
+  pose proof (lvars_at_depth_relevant_env_subset_relevant
+    0 Σ (CTWand τx τr) e) as Hrel.
+  unfold relevant_lvars.
+  cbn [erase_ty context_ty_lvars context_ty_lvars_at].
+  set_solver.
 Qed.
 
 Lemma persist_body_lift_support_subset Σ τ e :
@@ -688,15 +809,11 @@ Proof.
           apply open_env_values_inj_lift. exact Hinj. }
       rewrite !typed_lty_env_bind_open_env_lift.
       2: exact HfreshΣg.
-      2:{
-        apply open_env_lift_fresh_for_lvars_at_depth1.
-        eapply open_env_fresh_for_lvars_mono; [|exact Hfresh].
-        rewrite lvars_at_depth_typed_lty_env_bind.
-        pose proof (lvars_at_depth_relevant_env_subset_relevant
-          0 Σ (CTWand τx τr) e).
-        unfold relevant_lvars; cbn [context_ty_lvars context_ty_lvars_at].
-        set_solver.
-      }
+	      2:{
+	        apply open_env_lift_fresh_for_lvars_at_depth1.
+	        eapply open_env_fresh_for_lvars_mono; [|exact Hfresh].
+	        apply wand_outer_bind_lift1_support_subset.
+	      }
       rewrite relevant_env_open_env by (exact Hfresh || exact Hinj).
       rewrite open_cty_env_wand by exact Hinj.
       replace (erase_ty (CTWand τx τr))
@@ -948,34 +1065,172 @@ Qed.
 
 Lemma formula_open_over_result_body b φ y :
   formula_open 0 y (over_result_body b φ) =
-  FOver
-    (FAnd
-      (FAtom (qual_open_atom 0 y φ))
-      (expr_basic_typing_formula
-        (<[LVFree y := TBase b]> ∅)
-        (tret (vfvar y))
-        (TBase b))).
+  FOver (FAtom (qual_open_atom 0 y (typed_result_qual b φ))).
 Proof.
   unfold over_result_body.
-  rewrite formula_open_over, formula_open_and, formula_open_atom.
-  rewrite formula_open_result_basic_typing_formula.
+  rewrite formula_open_over, formula_open_atom.
   reflexivity.
 Qed.
 
 Lemma formula_open_under_result_body b φ y :
   formula_open 0 y (under_result_body b φ) =
-  FUnder
-    (FAnd
-      (FAtom (qual_open_atom 0 y φ))
-      (expr_basic_typing_formula
-        (<[LVFree y := TBase b]> ∅)
-        (tret (vfvar y))
-        (TBase b))).
+  FUnder (FAtom (qual_open_atom 0 y (typed_result_qual b φ))).
 Proof.
   unfold under_result_body.
-  rewrite formula_open_under, formula_open_and, formula_open_atom.
-  rewrite formula_open_result_basic_typing_formula.
+  rewrite formula_open_under, formula_open_atom.
   reflexivity.
+Qed.
+
+Lemma qualifier_holds_store_typed_result_qual_elim b φ y σ :
+  qualifier_holds_store (qual_open_atom 0 y (typed_result_qual b φ)) σ ->
+  qualifier_holds_store (qual_open_atom 0 y φ) σ.
+Proof.
+  destruct φ as [D P].
+  unfold typed_result_qual, qualifier_holds_store.
+  cbn [qual_open_atom qual_lvars qual_prop qual_vars].
+  intros [Hlc [Hsub [HP _]]].
+  assert (Hlc' : lc_lvars (lvars_open 0 y D)).
+  {
+    intros v Hv. apply Hlc.
+    eapply lvars_open_mono; [|exact Hv].
+    set_solver.
+  }
+  assert (Hsub' : lvars_fv (lvars_open 0 y D) ⊆ dom (σ : StoreT)).
+  {
+    intros x Hx. apply Hsub. apply lvars_fv_elem.
+    rewrite lvars_open_union.
+    apply elem_of_union_l.
+    apply lvars_fv_elem.
+    exact Hx.
+  }
+  exists Hlc', Hsub'.
+  - assert (Hstore_eq :
+      lso_store (lstore_on_restrict D
+	        (lstore_on_open_back 0 y (D ∪ {[LVBound 0]})
+	          (lstore_on_lift_store
+	            (lvars_open 0 y (D ∪ {[LVBound 0]})) σ Hlc Hsub))
+	        (set_unfold_2
+	          (λ (x : logic_var) (H : x ∈ D),
+	            @or_introl (x ∈ D) (x = LVBound 0) H))) =
+      lso_store (lstore_on_open_back 0 y D
+        (lstore_on_lift_store (lvars_open 0 y D) σ Hlc' Hsub'))).
+    {
+      unfold lstore_on_restrict, storeA_on_restrict, lstore_on_open_back.
+      cbn [lso_store storeAO_store lstore_on_lift_store].
+      unfold lstore_swap, lstore_rekey.
+      assert (Hrekey_lookup : forall (s : LStoreT) z,
+        ((storeA_rekey (swap (LVBound 0) (LVFree y)) s : LStoreT) !! z) =
+        (s : LStoreT) !! swap (LVBound 0) (LVFree y) z).
+      {
+        intros s z.
+	        replace z with
+	          (swap (LVBound 0) (LVFree y)
+	            (swap (LVBound 0) (LVFree y) z))
+	          by (rewrite swap_involutive; reflexivity).
+	        rewrite (storeA_rekey_lookup
+            (V:=value) (K:=logic_var)
+            (swap (LVBound 0) (LVFree y))
+            (swap_inj (LVBound 0) (LVFree y))
+            s (swap (LVBound 0) (LVFree y) z)).
+        rewrite swap_involutive.
+        reflexivity.
+      }
+      apply storeA_map_eq. intros z.
+      rewrite storeA_restrict_lookup.
+      rewrite !Hrekey_lookup.
+      try rewrite !storeA_restrict_lookup.
+      destruct (decide (z ∈ D)) as [HzD|HzD].
+	      - destruct (decide
+          (swap (LVBound 0) (LVFree y) z ∈
+            set_swap (LVBound 0) (LVFree y) D))
+          as [_|Hbad].
+	        2:{
+	          exfalso. apply Hbad.
+	          apply elem_of_set_swap.
+            rewrite swap_involutive.
+            exact HzD.
+	        }
+	        destruct (decide
+	          (swap (LVBound 0) (LVFree y) z ∈
+	            set_swap (LVBound 0) (LVFree y) (D ∪ {[LVBound 0]})))
+          as [_|Hbad].
+        2:{
+          exfalso. apply Hbad.
+          apply elem_of_set_swap.
+          set_solver.
+        }
+        destruct (decide
+          (swap (LVBound 0) (LVFree y) z ∈
+            set_swap (LVBound 0) (LVFree y) D))
+          as [_|Hbad].
+	        2:{
+	          exfalso. apply Hbad.
+	          apply elem_of_set_swap.
+	          rewrite swap_involutive.
+	          exact HzD.
+	        }
+        rewrite (storeA_restrict_lookup
+          (V:=value) (K:=logic_var) (lstore_lift_free σ)
+          (set_swap (LVBound 0) (LVFree y) (D ∪ {[LVBound 0]}))
+          (swap (LVBound 0) (LVFree y) z)).
+        rewrite (storeA_restrict_lookup
+          (V:=value) (K:=logic_var) (lstore_lift_free σ)
+          (set_swap (LVBound 0) (LVFree y) D)
+          (swap (LVBound 0) (LVFree y) z)).
+        destruct (decide
+          (swap (LVBound 0) (LVFree y) z ∈
+            set_swap (LVBound 0) (LVFree y) (D ∪ {[LVBound 0]})))
+          as [_|Hbad].
+	        2:{
+	          exfalso. apply Hbad.
+	          apply elem_of_set_swap.
+	          rewrite swap_involutive.
+	          apply elem_of_union_l. exact HzD.
+	        }
+        destruct (decide
+          (swap (LVBound 0) (LVFree y) z ∈
+            set_swap (LVBound 0) (LVFree y) D))
+          as [_|Hbad].
+        2:{
+          exfalso. apply Hbad.
+          apply elem_of_set_swap.
+          rewrite swap_involutive.
+          exact HzD.
+        }
+	        reflexivity.
+	      - destruct (decide
+	          (swap (LVBound 0) (LVFree y) z ∈
+	            set_swap (LVBound 0) (LVFree y) D))
+	        as [Hbad|_].
+		        1:{
+		          apply elem_of_set_swap in Hbad.
+              rewrite set_swap_involutive in Hbad.
+              exact (False_rect _ (HzD Hbad)).
+		        }
+        rewrite (storeA_restrict_lookup
+          (V:=value) (K:=logic_var) (lstore_lift_free σ)
+          (set_swap (LVBound 0) (LVFree y) D)
+          (swap (LVBound 0) (LVFree y) z)).
+        destruct (decide
+          (swap (LVBound 0) (LVFree y) z ∈
+            set_swap (LVBound 0) (LVFree y) D))
+          as [Hbad|_].
+        + apply elem_of_set_swap in Hbad.
+          rewrite set_swap_involutive in Hbad.
+          exact (False_rect _ (HzD Hbad)).
+        + reflexivity.
+	    }
+    replace (lstore_on_open_back 0 y D
+        (lstore_on_lift_store (lvars_open 0 y D) σ Hlc' Hsub'))
+	      with (lstore_on_restrict D
+	        (lstore_on_open_back 0 y (D ∪ {[LVBound 0]})
+	          (lstore_on_lift_store
+	            (lvars_open 0 y (D ∪ {[LVBound 0]})) σ Hlc Hsub))
+	        (set_unfold_2
+	          (λ (x : logic_var) (H : x ∈ D),
+	            @or_introl (x ∈ D) (x = LVBound 0) H))).
+    + exact HP.
+    + apply lstore_on_ext. exact Hstore_eq.
 Qed.
 
 Lemma set_swap_qual_vars_open_atom0 z (φ : type_qualifier) :
@@ -1550,10 +1805,13 @@ Proof.
     end;
       try solve [specialize (Hrel_sub v Hcase); better_set_solver
         | better_set_solver].
-	  - destruct τ as [b φ|b φ|τ1 τ2|τ1 τ2|τ1 τ2|τx τr|τx τr|τ1];
-	      cbn [ty_denote_gas formula_lvars_at
-	        shift_from shift_tm_inst shift_value_inst shift_cty_inst shift_lvars_inst].
-    + normalize_denot_formula_lvars.
+		  - destruct τ as [b φ|b φ|τ1 τ2|τ1 τ2|τ1 τ2|τx τr|τx τr|τ1];
+		      cbn [ty_denote_gas formula_lvars_at
+		        shift_from shift_tm_inst shift_value_inst shift_cty_inst shift_lvars_inst].
+	    + normalize_denot_formula_lvars.
+	      unfold typed_result_qual; cbn [qual_lvars qual_vars].
+	      rewrite lvars_at_depth_union.
+	      rewrite lvars_at_depth_singleton_bound0_succ.
 	      pose proof (lvars_at_depth_relevant_env_subset_relevant
 	        d Σ (CTOver b φ) e) as Hrel.
 	      pose proof (expr_result_shift0_lvars_subset d
@@ -1563,31 +1821,11 @@ Proof.
 	        ltac:(intros u Hu; apply elem_of_difference in Hu as [Hu _]; exact Hu))
 	        as Hqual.
 	      cbn [context_ty_lvars_at].
-	      intros v Hv.
-	      set_unfold in Hrel.
-	      set_unfold in Hresult.
-		      set_unfold in Hqual.
-		      set_unfold in Hv.
-		      set_unfold.
-          repeat match type of Hv with
-          | _ \/ _ => destruct Hv as [Hv|Hv]
-          end;
-          try solve
-            [ left; exact Hv
-            | right; exact Hv
-            | contradiction
-            | specialize (Hrel v Hv); tauto
-            | specialize (Hresult v Hv); tauto
-            | specialize (Hqual v Hv); tauto
-            | rewrite typed_lty_env_bind_dom in Hv;
-              rewrite dom_empty_L in Hv;
-              rewrite !lvars_at_depth_union in Hv;
-              rewrite !lvars_at_depth_shift_under in Hv by lia;
-              rewrite !lvars_at_depth_singleton_bound0_succ in Hv;
-              rewrite !lvars_at_depth_empty in Hv;
-              set_solver
-            | rewrite elem_of_empty in Hv; contradiction ].
-	    + normalize_denot_formula_lvars.
+	      better_set_solver.
+		    + normalize_denot_formula_lvars.
+	      unfold typed_result_qual; cbn [qual_lvars qual_vars].
+	      rewrite lvars_at_depth_union.
+	      rewrite lvars_at_depth_singleton_bound0_succ.
 	      pose proof (lvars_at_depth_relevant_env_subset_relevant
 	        d Σ (CTUnder b φ) e) as Hrel.
 	      pose proof (expr_result_shift0_lvars_subset d
@@ -1597,30 +1835,7 @@ Proof.
 	        ltac:(intros u Hu; apply elem_of_difference in Hu as [Hu _]; exact Hu))
 	        as Hqual.
 	      cbn [context_ty_lvars_at].
-	      intros v Hv.
-	      set_unfold in Hrel.
-	      set_unfold in Hresult.
-		      set_unfold in Hqual.
-		      set_unfold in Hv.
-		      set_unfold.
-          repeat match type of Hv with
-          | _ \/ _ => destruct Hv as [Hv|Hv]
-          end;
-          try solve
-            [ left; exact Hv
-            | right; exact Hv
-            | contradiction
-            | specialize (Hrel v Hv); tauto
-            | specialize (Hresult v Hv); tauto
-            | specialize (Hqual v Hv); tauto
-            | rewrite typed_lty_env_bind_dom in Hv;
-              rewrite dom_empty_L in Hv;
-              rewrite !lvars_at_depth_union in Hv;
-              rewrite !lvars_at_depth_shift_under in Hv by lia;
-              rewrite !lvars_at_depth_singleton_bound0_succ in Hv;
-              rewrite !lvars_at_depth_empty in Hv;
-              set_solver
-            | rewrite elem_of_empty in Hv; contradiction ].
+	      better_set_solver.
 	    + unfold_formula_lvars_atoms.
 	      repeat rewrite ?lvars_at_depth_union.
 	      rewrite_tm_support.
