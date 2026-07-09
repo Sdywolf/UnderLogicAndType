@@ -42,6 +42,16 @@ rocq makefile -f _CoqProject -o Makefile
 make
 ```
 
+As a rough reference point, on an Apple M5 machine with 10 logical CPUs, a
+clean build of this artifact completed in about 2 minutes 33 seconds
+(153 seconds) using:
+
+```bash
+make clean
+rocq makefile -f _CoqProject -o Makefile
+make TIMED=1
+```
+
 ## Design Choices and Differences from the Paper
 
 - The paper first introduces a restricted deterministic language (Sections
@@ -146,18 +156,18 @@ ContextBase
 | Resource algebra operations | Sec. 4.2, Definitions D.3–D.5 in appendix | Abstract algebra class (`ContextAlgebra`) in `ContextAlgebra/theories/ResourceAlgebra.v` (line 10); concrete compatibility/product/sum/subset in `ContextAlgebra/theories/ResourceInterfaceCore.v` (lines 438-446) | `m1 ##ᵣ m2`, `m1 ×[H] m2`, `m1 +[H] m2`, `m1 ⊆ᵣ m2` |
 | Formula syntax | Definition 4.3 and Sec. 5 | Formula syntax (`Formula`) in `ContextLogic/theories/FormulaSyntaxCore.v` (line 20) | `⊤`, `⊥`, `@atom q`, `P ∧ Q`, `P ∨ Q`, `P → Q`, `P ∗ Q`, `P -∗[d] Q`, `P ⊕ Q`, `∀. P`, `over P`, `under P`, `□ P`, `fib D |> P` |
 | Formula satisfaction | Definition 4.3 and persistence in Sec. 5 | Satisfaction (`res_models`) in `ContextLogic/theories/FormulaSemantics.v` (line 891) | `m ⊨ P` |
-| Entailment and equivalence | Definition 4.3 | Entailment (`entails`) in `ContextLogic/theories/FormulaSemantics.v` (line 910); formula equivalence (`formula_equiv`) in `ContextLogic/theories/FormulaConnectivesHigher.v` (line 825) | `P ⊫ Q`, `P ⊣⊢ Q` |
+| Entailment and equivalence | Definition 4.3 | Entailment (`entails`) in `ContextLogic/theories/FormulaSemantics.v` (line 910); formula equivalence (`formula_equiv`) in `ContextLogic/theories/FormulaConnectivesHigher.v` (line 841) | `P ⊫ Q`, `P ⊣⊢ Q` |
 | Kripke monotonicity | Theorem 4.4 | `res_models_kripke` in `ContextLogic/theories/FormulaSemantics.v` (line 913) | `m ⊑ n -> m ⊨ P -> n ⊨ P` |
 | Core base types and primitive operations | Core language syntax (Fig. 1) | Basic types (`base_ty`) in `CoreLang/theories/Syntax.v` (line 14); primitive operations (`prim_op`) in `CoreLang/theories/Syntax.v` (line 45) | `Unit`, `Bool`, `Nat`, `T1 →ₜ T2`, `op_eq0`, `op_plus1`, `op_minus1`, `op_boolGen`, `op_natGen` |
-| Term syntax | Core language syntax (Fig. 1) | Mutually recursive values (`value`) and expressions (`tm`) in `CoreLang/theories/Syntax.v` (lines 75 and 82) | `ret v`, `let: e1 in e2`, `v1 · v2`, `if v then et else ef` |
+| Term syntax | Core language syntax (Fig. 1) | Mutually recursive values (`value`) and expressions (`tm`) in `CoreLang/theories/Syntax.v` (lines 76 and 83) | `ret v`, `let: e1 in e2`, `v1 · v2`, `if v then et else ef` |
 | Operational semantics | Fig. 9 in appendix | Small-step relation (`step`) in `CoreLang/theories/SmallStep.v` (line 98) | `step e e'` |
 | Basic typing | Fig. 11 in appendix | Basic typing judgments (`value_has_type`, `tm_has_type`) in `CoreLang/theories/BasicTyping.v` (lines 34 and 49) | `Γ ⊢ᵥ v ⋮ T`, `Γ ⊢ₑ e ⋮ T` |
 | Qualifiers | Type syntax (Fig. 2) | Semantic qualifiers (`tqual D P`) in `ContextQualifier/theories/Qualifier.v`; equality qualifier (`mk_q_eq`) in `ContextTypeLanguage/theories/Syntax.v` (line 390) | Shallow Coq propositions with explicit support |
 | Context type syntax | Type syntax (Fig. 2) | Context types (`context_ty`) in `ContextTypeLanguage/theories/Syntax.v` (line 31) | `{: b | φ }`, `[: b | φ ]`, `τ1 ⊓ τ2`, `τ1 ⊔ τ2`, `τ1 ⊕ τ2`, `τx → τ`, `τx -∗ τ`, `□ τ` |
 | Type context syntax | Type syntax (Fig. 2) | Contexts (`ctx`) in `ContextTypeLanguage/theories/Syntax.v` (line 41) | `Emp`, `x ∷ τ`, `Γ1 ,, Γ2`, `Γ1 ∗ Γ2`, `Γ1 ⊕ Γ2` |
 | Type erasure | Fig. 10 in appendix | Type erasure (`erase_ty`) and context erasure (`erase_ctx`) in `ContextTypeLanguage/theories/Syntax.v` (lines 257 and 275) | `⌊τ⌋`, `⌊Γ⌋` |
-| Term-denotation and guard formulas | Sec. 4.4, Type Denotation and Soundness, first paragraph: denotation of a term `e`, basic typing, and totality guards | Result formula (`expr_result_formula_at`) in `ContextBasicDenotation/theories/TermOpen.v` (line 1086); total formula (`expr_total_formula`) in `ContextBasicDenotation/theories/TermEval.v` (line 1140); basic typing formula (`expr_basic_typing_formula`) in `ContextBasicDenotation/theories/BasicTypingFormula.v` (line 1136); world/guard formulas (`basic_world_formula`, `ty_guard_formula`, `ty_static_guard_formula`) in `ContextBasicDenotation/theories/StoreTyping.v` (line 48) and `Denotation/theories/TypeDenote.v` (lines 7 and 13) | `FResult[D ⊢ e ⇓ x]`, `FTotal[e]`, `FHasType[Σ ⊢ e ⋮ T]`, `FWorld[Σ]`, `guard[Σ; τ; e]`, `static_guard[Σ; τ; e]` |
-| Type denotation | Definition 4.7, Definition 5.2, and Sec. 5.2 | Gas-indexed type denotation (`ty_denote_gas`) in `Denotation/theories/TypeDenote.v` (line 122); saturated denotation (`ty_denote`) in `Denotation/theories/TypeDenote.v` (line 187) | `⟦ty τ⟧[Σ, gas] e`, `⟦ty τ⟧[Δ] e`, `TyDenote[Δ; τ; e]` |
+| Term-denotation and guard formulas | Sec. 4.4, Type Denotation and Soundness, first paragraph: denotation of a term `e`, basic typing, and totality guards | Result formula (`expr_result_formula_at`) in `ContextBasicDenotation/theories/TermOpen.v` (line 17); total formula (`expr_total_formula`) in `ContextBasicDenotation/theories/TermEval.v` (line 1112); basic typing formula (`expr_basic_typing_formula`) in `ContextBasicDenotation/theories/BasicTypingFormula.v` (line 953); world/guard formulas (`basic_world_formula`, `ty_guard_formula`, `ty_static_guard_formula`) in `ContextBasicDenotation/theories/StoreTyping.v` (line 48) and `Denotation/theories/TypeDenote.v` (lines 7 and 13) | `FResult[D ⊢ e ⇓ x]`, `FTotal[e]`, `FHasType[Σ ⊢ e ⋮ T]`, `FWorld[Σ]`, `guard[Σ; τ; e]`, `static_guard[Σ; τ; e]` |
+| Type denotation | Definition 4.7, Definition 5.2, and Sec. 5.2 | Gas-indexed type denotation (`ty_denote_gas`) in `Denotation/theories/TypeDenote.v` (line 131); saturated denotation (`ty_denote`) in `Denotation/theories/TypeDenote.v` (line 194) | `⟦ty τ⟧[Σ, gas] e`, `⟦ty τ⟧[Δ] e`, `TyDenote[Δ; τ; e]` |
 | Type context denotation | Definition 4.8 | Context denotation (`ctx_denote_under`) in `Denotation/theories/Context.v` (line 17) | `⟦ctx⟧[Σ] Γ` |
 | Well-founded recursive-call relation | Fig. 4, T-Fix rule | Base-value order (`constant_lt_for_base`) in `ContextTypeLanguage/theories/Syntax.v` (line 414); recursive-call argument type (`fix_rec_call_ty`) in the same file (line 449); used by T-Fix in `ContextTyping/theories/Typing.v` (line 188) | `c1 ≺[b] c2`, `fix_rec_call_ty b y τx τ` |
 | Typing judgment | Fig. 4 and Sec. 5.1 | Context typing judgment (`has_context_type`) in `ContextTyping/theories/Typing.v` (line 103) | `Γ ⊢ᶜ [Φ; Σ] e ⋮ τ` |
@@ -165,9 +175,9 @@ ContextBase
 | Semantic type subsumption | Fig. 5 | Semantic subtype (`sub_type_under`) in `ContextTyping/theories/Typing.v` (line 44) | `Γ ⊢ᶜ τ1 ≤[Σ] τ2` |
 | Semantic context subsumption | Fig. 5 | Semantic context subtype (`ctx_sub_under`) in `ContextTyping/theories/Typing.v` (line 54) | `Γ1 ≤ᶜ[Σ; X] Γ2` |
 | Primitive-operation context | Definition 4.9 | Primitive signature (`primop_sig`) and context (`primop_ctx`) in `ContextTyping/theories/PrimOpContext.v` (lines 17 and 30); well-formedness (`wf_primop_ctx`) in `ContextTyping/theories/PrimOpContext.v` (line 56) | `wf_primop_ctx Φ` |
-| Concrete primitive context | Concrete instance of Definition 4.9 | Concrete context (`concrete_Φ`) in `ContextTyping/theories/PrimOpConcreteContext.v` (line 171); well-formedness theorem (`concrete_Φ_wf`) in `ContextTyping/theories/PrimOpConcreteContext.v` (line 1297) | `concrete_Φ` |
-| Fundamental theorem (nondeterministic system) | Theorem 4.10 (deterministic statement in the paper); mechanized for the Section 5 nondeterministic calculus, which subsumes Theorem 4.10 | `Fundamental` in `ContextTyping/theories/Soundness.v` (line 977); concrete wrapper `concrete_Fundamental` in the same file (line 1152) | `Γ ⊢ᶜ [Φ; Σ] e ⋮ τ -> ⟦ctx⟧[Σ] Γ ⊫ ...` |
-| Denotational soundness (nondeterministic system) | Corollary 4.11 / Theorem 5.3; mechanized for the Section 5 nondeterministic calculus (covers the deterministic closed-program corollary as a special case) | `denotational_soundness` in `ContextTyping/theories/Soundness.v` (line 1079); concrete wrapper `concrete_denotational_soundness` in the same file (line 1159) | closed programs have a result world satisfying `TyDenote[...]`; concrete versions instantiate `Φ := concrete_Φ` |
+| Concrete primitive context | Concrete instance of Definition 4.9 | Concrete context (`concrete_Φ`) in `ContextTyping/theories/PrimOpConcreteContext.v` (line 172); well-formedness theorem (`concrete_Φ_wf`) in `ContextTyping/theories/PrimOpConcreteContext.v` (line 1404) | `concrete_Φ` |
+| Fundamental theorem (nondeterministic system) | Theorem 4.10 (deterministic statement in the paper); mechanized for the Section 5 nondeterministic calculus, which subsumes Theorem 4.10 | `Fundamental` in `ContextTyping/theories/Soundness.v` (line 975); concrete wrapper `concrete_Fundamental` in the same file (line 1150) | `Γ ⊢ᶜ [Φ; Σ] e ⋮ τ -> ⟦ctx⟧[Σ] Γ ⊫ ...` |
+| Denotational soundness (nondeterministic system) | Corollary 4.11 / Theorem 5.3; mechanized for the Section 5 nondeterministic calculus (covers the deterministic closed-program corollary as a special case) | `denotational_soundness` in `ContextTyping/theories/Soundness.v` (line 1077); concrete wrapper `concrete_denotational_soundness` in the same file (line 1157) | closed programs have a result world satisfying `TyDenote[...]`; concrete versions instantiate `Φ := concrete_Φ` |
 
 The mechanized Fundamental Theorem and denotational soundness are stated for
 the nondeterministic language of Section 5.  Instantiating them to programs
@@ -366,7 +376,7 @@ Lemma ty_denote_gas_minimal_on gas Σ τ e (m : WfWorldT) :
   res_restrict m (fv_tm e ∪ fv_cty τ) ⊨ ty_denote_gas gas Σ τ e.
 ```
 
-This theorem is in `Denotation/theories/TypeDenoteRegular.v` (line 1803).
+This theorem is in `Denotation/theories/TypeDenoteRegular.v` (line 2018).
 
 As in the paper, type denotation always includes the ordinary well-formedness,
 well-typedness, and totality obligations.  These are encoded in the guard, and
@@ -382,10 +392,10 @@ Definition ty_guard_formula
 
 The guard definition is in `Denotation/theories/TypeDenote.v` (line 7), and
 the fixpoint begins with `guard[Σg; τ; e] ∧ ...` in the same file (lines
-122-127).
+131-136).
 
 The paper encodes these side conditions as
-`∀M{Dom(Σ)} Atom(...)`: the binding-reference operator first fixes the
+`{Dom(Σ)} |> Atom(...)`: the binding-reference operator first fixes the
 variables in `Σ`, and only then evaluates the exact atom.  In the artifact
 this pattern is packaged as the abbreviation `FFiberAtom` (`fiber_atom q`):
 
