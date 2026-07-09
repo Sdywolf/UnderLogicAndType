@@ -2,8 +2,14 @@
 
 This repository is the Rocq proof artifact for the paper *Context Types:
 Bunched Modalities for Unifying Safety and Reachability*.  It mechanizes the
-core context-type calculus, its resource semantics, the main Fundamental
-Theorem, and the closed-program denotational soundness theorem.
+core context-type calculus, its resource semantics, and the Fundamental
+Theorem together with denotational soundness --- all stated
+and proved for the paper's **nondeterministic** language (Section 5), which
+includes generators and type-level persistence.  Because that development
+subsumes the deterministic fragment of Sections 3--4 (every deterministic
+term is a special case of the nondeterministic calculus, and the proofs
+cover the corresponding typing rules), the same theorems also serve as a
+mechanization of the deterministic metatheory.
 
 The compiled development contains no `Admitted.`/`admit.` in Rocq source files.
 
@@ -38,12 +44,17 @@ make
 
 ## Design Choices and Differences from the Paper
 
-- The paper first introduces a restricted deterministic language and then
-  presents its nondeterministic extension.  This artifact implements the full
-  nondeterministic language and context type system used by the metatheory:
-  nondeterministic operational semantics, nondeterministic generators
-  `boolGen` and `natGen`, precise primitive-operation contracts, and
-  type-level persistence.
+- The paper first introduces a restricted deterministic language (Sections
+  3--4) and then presents its nondeterministic extension (Section 5).  This
+  artifact implements the **full nondeterministic** language and context type
+  system: nondeterministic operational semantics, generators `boolGen` and
+  `natGen`, precise primitive-operation contracts, and type-level
+  persistence.  The mechanized Fundamental Theorem and denotational
+  soundness are proved in that nondeterministic setting (corresponding to
+  the Section 5 metatheory).  They nevertheless also cover the deterministic
+  fragment: the deterministic rules and denotations of Sections 3--4 arise
+  as the special case without generators or persistence, and those cases are
+  included in the same proof development.
 - The checked core language is limited to `Unit`, `Bool`, and `Nat`; it does
   not include lists or trees.  These are straightforward datatype extensions
   of the core.  The primitive operators include the usual unary operations
@@ -120,40 +131,48 @@ ContextBase
   Arrow/Wand support, let transport, and primitive-operation denotation
   support.
 - `ContextTyping` defines primitive-operation contexts, typing rules, and the
-  soundness proof.  The main soundness proof is split by typing-rule families,
-  with separate files for lambdas, applications, match, recursion, and
-  persistence.
+  soundness proof for the nondeterministic system.  The main soundness proof
+  is split by typing-rule families, with separate files for lambdas,
+  applications, match, recursion, and persistence; the deterministic
+  fragment is covered as the special case of these proofs.
 
 ## Paper-to-artifact Correspondence
 
 | Definition/Theorems | Paper | Definition | Notation |
 | --- | --- | --- | --- |
-| Store/environment | Definition 4.1, Definition D.1 in appendix | Stores (`Store`, `LStore`) in `ContextStore/StoreInterface.v` (lines 13 and 14); restriction and compatibility notations in the same file (lines 45-50) | `σ ↾ X`, `σ1 ##ₛ σ2`, map notation `<[x := v]> σ`, `σ !! x` |
+| Store/environment | Definition D.1 in appendix | Stores (`Store`, `LStore`) in `ContextStore/StoreInterface.v` (lines 13 and 14); restriction and compatibility notations in the same file (lines 45-50) | `σ ↾ X`, `σ1 ##ₛ σ2`, map notation `<[x := v]> σ`, `σ !! x` |
 | Capability/resource/world | Definition 4.1, Definition D.2 in appendix | Worlds/resources (`World`, `WfWorld`) in `ContextAlgebra/theories/ResourceInterfaceCore.v` (lines 17 and 18); domain/stores/restriction/unit in the same file (lines 27-56) | `𝟙`, `Dom m`, `m ↾ X`, `m ⊑ᵣ n` |
-| Resource algebra operations | Definition 4.2, Sec 4.2, Definition D.3 and D.4 in appendix | Abstract algebra class (`ContextAlgebra`) in `ContextAlgebra/theories/ResourceAlgebra.v` (line 10); concrete compatibility/product/sum/subset in `ContextAlgebra/theories/ResourceInterfaceCore.v` (lines 438-446); fiber/projection operations in `ContextAlgebra/theories/ResourceInterfaceCore.v` (lines 597-600) | `m1 ##ᵣ m2`, `m1 ×[H] m2`, `m1 +[H] m2`, `m1 ⊆ᵣ m2`, `fiber(mfib, m, X, σ)`, `mfib ∈ᶠ Fiber(m, X)` |
+| Fiber | Definition 4.2 | Fiber/projection operations in `ContextAlgebra/theories/ResourceInterfaceCore.v` (lines 597-600) | `fiber(mfib, m, X, σ)`, `mfib ∈ᶠ Fiber(m, X)` |
+| Resource algebra operations | Sec. 4.2, Definitions D.3–D.5 in appendix | Abstract algebra class (`ContextAlgebra`) in `ContextAlgebra/theories/ResourceAlgebra.v` (line 10); concrete compatibility/product/sum/subset in `ContextAlgebra/theories/ResourceInterfaceCore.v` (lines 438-446) | `m1 ##ᵣ m2`, `m1 ×[H] m2`, `m1 +[H] m2`, `m1 ⊆ᵣ m2` |
 | Formula syntax | Definition 4.3 | Formula syntax (`Formula`) in `ContextLogic/theories/FormulaSyntaxCore.v` (line 20) | `⊤`, `⊥`, `@atom q`, `P ∧ Q`, `P ∨ Q`, `P → Q`, `P ∗ Q`, `P -∗[d] Q`, `P ⊕ Q`, `∀. P`, `over P`, `under P`, `□ P`, `fib D |> P` |
 | Formula satisfaction | Definition 4.3 and persistence in Sec. 5 | Satisfaction (`res_models`) in `ContextLogic/theories/FormulaSemantics.v` (line 891) | `m ⊨ P` |
 | Entailment and equivalence | Definition 4.3 | Entailment (`entails`) in `ContextLogic/theories/FormulaSemantics.v` (line 910); formula equivalence (`formula_equiv`) in `ContextLogic/theories/FormulaConnectivesHigher.v` (line 825) | `P ⊫ Q`, `P ⊣⊢ Q` |
 | Kripke monotonicity | Theorem 4.4 | `res_models_kripke` in `ContextLogic/theories/FormulaSemantics.v` (line 913) | `m ⊑ n -> m ⊨ P -> n ⊨ P` |
-| Core base types and primitive operations | Core language syntax figures (Fig. 2) | Basic types (`base_ty`) in `CoreLang/theories/Syntax.v` (line 14); primitive operations (`prim_op`) in `CoreLang/theories/Syntax.v` (line 45) | `Unit`, `Bool`, `Nat`, `T1 →ₜ T2`, `op_eq0`, `op_plus1`, `op_minus1`, `op_boolGen`, `op_natGen` |
-| Term syntax | Core language syntax figures (Fig. 2) | Mutually recursive values (`value`) and expressions (`tm`) in `CoreLang/theories/Syntax.v` (lines 75 and 82) | `ret v`, `let: e1 in e2`, `v1 · v2`, `if v then et else ef` |
-| Operational semantics | Fig. 9 in appendix  | Small-step relation (`step`) in `CoreLang/theories/SmallStep.v` (line 98) | `step e e'` |
-| Basic typing | Fig. 10 in appendix | Basic typing judgments (`value_has_type`, `tm_has_type`) in `CoreLang/theories/BasicTyping.v` (lines 34 and 49) | `Γ ⊢ᵥ v ⋮ T`, `Γ ⊢ₑ e ⋮ T` |
-| Qualifiers | Type syntax (Fig. 3) | Semantic qualifiers (`tqual D P`) in `ContextQualifier/theories/Qualifier.v`; equality qualifier (`mk_q_eq`) in `ContextTypeLanguage/theories/Syntax.v` (line 390) | Shallow Coq propositions with explicit support |
-| Context type syntax | Type syntax (Fig. 3) | Context types (`context_ty`) in `ContextTypeLanguage/theories/Syntax.v` (line 31) | `{: b | φ }`, `[: b | φ ]`, `τ1 ⊓ τ2`, `τ1 ⊔ τ2`, `τ1 ⊕ τ2`, `τx → τ`, `τx -∗ τ`, `□ τ` |
-| Type context syntax | Type syntax (Fig. 3) | Contexts (`ctx`) in `ContextTypeLanguage/theories/Syntax.v` (line 41) | `Emp`, `x ∷ τ`, `Γ1 ,, Γ2`, `Γ1 ∗ Γ2`, `Γ1 ⊕ Γ2` |
+| Core base types and primitive operations | Core language syntax (Fig. 1) | Basic types (`base_ty`) in `CoreLang/theories/Syntax.v` (line 14); primitive operations (`prim_op`) in `CoreLang/theories/Syntax.v` (line 45) | `Unit`, `Bool`, `Nat`, `T1 →ₜ T2`, `op_eq0`, `op_plus1`, `op_minus1`, `op_boolGen`, `op_natGen` |
+| Term syntax | Core language syntax (Fig. 1) | Mutually recursive values (`value`) and expressions (`tm`) in `CoreLang/theories/Syntax.v` (lines 75 and 82) | `ret v`, `let: e1 in e2`, `v1 · v2`, `if v then et else ef` |
+| Operational semantics | Fig. 9 in appendix | Small-step relation (`step`) in `CoreLang/theories/SmallStep.v` (line 98) | `step e e'` |
+| Basic typing | Fig. 11 in appendix | Basic typing judgments (`value_has_type`, `tm_has_type`) in `CoreLang/theories/BasicTyping.v` (lines 34 and 49) | `Γ ⊢ᵥ v ⋮ T`, `Γ ⊢ₑ e ⋮ T` |
+| Qualifiers | Type syntax (Fig. 2) | Semantic qualifiers (`tqual D P`) in `ContextQualifier/theories/Qualifier.v`; equality qualifier (`mk_q_eq`) in `ContextTypeLanguage/theories/Syntax.v` (line 390) | Shallow Coq propositions with explicit support |
+| Context type syntax | Type syntax (Fig. 2) | Context types (`context_ty`) in `ContextTypeLanguage/theories/Syntax.v` (line 31) | `{: b | φ }`, `[: b | φ ]`, `τ1 ⊓ τ2`, `τ1 ⊔ τ2`, `τ1 ⊕ τ2`, `τx → τ`, `τx -∗ τ`, `□ τ` |
+| Type context syntax | Type syntax (Fig. 2) | Contexts (`ctx`) in `ContextTypeLanguage/theories/Syntax.v` (line 41) | `Emp`, `x ∷ τ`, `Γ1 ,, Γ2`, `Γ1 ∗ Γ2`, `Γ1 ⊕ Γ2` |
 | Term-denotation and guard formulas | Sec. 4.4, Type Denotation and Soundness, first paragraph: denotation of a term `e`, basic typing, and totality guards | Result formula (`expr_result_formula_at`) in `ContextBasicDenotation/theories/TermOpen.v` (line 1086); total formula (`expr_total_formula`) in `ContextBasicDenotation/theories/TermEval.v` (line 1140); basic typing formula (`expr_basic_typing_formula`) in `ContextBasicDenotation/theories/BasicTypingFormula.v` (line 1136); world/guard formulas (`basic_world_formula`, `ty_guard_formula`, `ty_static_guard_formula`) in `ContextBasicDenotation/theories/StoreTyping.v` (line 48) and `Denotation/theories/TypeDenote.v` (lines 7 and 13) | `FResult[D ⊢ e ⇓ x]`, `FTotal[e]`, `FHasType[Σ ⊢ e ⋮ T]`, `FWorld[Σ]`, `guard[Σ; τ; e]`, `static_guard[Σ; τ; e]` |
 | Type denotation | Definition 4.7, Definition 5.2, and Sec. 5.2 | Gas-indexed type denotation (`ty_denote_gas`) in `Denotation/theories/TypeDenote.v` (line 122); saturated denotation (`ty_denote`) in `Denotation/theories/TypeDenote.v` (line 187) | `⟦ty τ⟧[Σ, gas] e`, `⟦ty τ⟧[Δ] e`, `TyDenote[Δ; τ; e]` |
 | Type context denotation | Definition 4.8 | Context denotation (`ctx_denote_under`) in `Denotation/theories/Context.v` (line 17) | `⟦ctx⟧[Σ] Γ` |
-| Well-founded recursive-call relation | Fig. 5, T-Fix rule | Base-value order (`constant_lt_for_base`) in `ContextTypeLanguage/theories/Syntax.v` (line 414); recursive-call argument type (`fix_rec_call_ty`) in the same file (line 449); used by T-Fix in `ContextTyping/theories/Typing.v` (line 188) | `c1 ≺[b] c2`, `fix_rec_call_ty b y τx τ` |
-| Typing judgment | Fig. 5 and Sec. 5.1 | Context typing judgment (`has_context_type`) in `ContextTyping/theories/Typing.v` (line 103) | `Γ ⊢ᶜ [Φ; Σ] e ⋮ τ` |
-| Typing well-formedness | Fig. 4, Fig. 10 and Fig. 11 in appendix | Well-formedness (`context_typing_wf`) in `ContextTyping/theories/Typing.v` (line 66) | `Γ ⊢wf[Σ] e ⋮ τ` |
-| Semantic type subsumption | Fig. 6 | Semantic subtype (`sub_type_under`) in `ContextTyping/theories/Typing.v` (line 44) | `Γ ⊢ᶜ τ1 ≤[Σ] τ2` |
-| Semantic context subsumption | Fig. 6 | Semantic context subtype (`ctx_sub_under`) in `ContextTyping/theories/Typing.v` (line 54) | `Γ1 ≤ᶜ[Σ; X] Γ2` |
-| Primitive-operation context | Theorem 4.9 | Primitive signature (`primop_sig`) and context (`primop_ctx`) in `ContextTyping/theories/PrimOpContext.v` (lines 17 and 30); well-formedness (`wf_primop_ctx`) in `ContextTyping/theories/PrimOpContext.v` (line 56) | `wf_primop_ctx Φ` |
-| Concrete primitive context | Concrete instance of Theorem 4.9 | Concrete context (`concrete_Φ`) in `ContextTyping/theories/PrimOpConcreteContext.v` (line 171); well-formedness theorem (`concrete_Φ_wf`) in `ContextTyping/theories/PrimOpConcreteContext.v` (line 1297) | `concrete_Φ` |
-| Fundamental theorem | Theorem 4.10 | `Fundamental` in `ContextTyping/theories/Soundness.v` (line 977); concrete wrapper `concrete_Fundamental` in the same file (line 1152) | `Γ ⊢ᶜ [Φ; Σ] e ⋮ τ -> ⟦ctx⟧[Σ] Γ ⊫ ...` |
-| Denotational soundness | Theorem 4.11 | `denotational_soundness` in `ContextTyping/theories/Soundness.v` (line 1079); concrete wrapper `concrete_denotational_soundness` in the same file (line 1159) | closed programs have a result world satisfying `TyDenote[...]`; concrete versions instantiate `Φ := concrete_Φ` |
+| Well-founded recursive-call relation | Fig. 4, T-Fix rule | Base-value order (`constant_lt_for_base`) in `ContextTypeLanguage/theories/Syntax.v` (line 414); recursive-call argument type (`fix_rec_call_ty`) in the same file (line 449); used by T-Fix in `ContextTyping/theories/Typing.v` (line 188) | `c1 ≺[b] c2`, `fix_rec_call_ty b y τx τ` |
+| Typing judgment | Fig. 4 and Sec. 5.1 | Context typing judgment (`has_context_type`) in `ContextTyping/theories/Typing.v` (line 103) | `Γ ⊢ᶜ [Φ; Σ] e ⋮ τ` |
+| Typing well-formedness | Fig. 3, Fig. 13 in appendix | Well-formedness (`context_typing_wf`) in `ContextTyping/theories/Typing.v` (line 66) | `Γ ⊢wf[Σ] e ⋮ τ` |
+| Semantic type subsumption | Fig. 5 | Semantic subtype (`sub_type_under`) in `ContextTyping/theories/Typing.v` (line 44) | `Γ ⊢ᶜ τ1 ≤[Σ] τ2` |
+| Semantic context subsumption | Fig. 5 | Semantic context subtype (`ctx_sub_under`) in `ContextTyping/theories/Typing.v` (line 54) | `Γ1 ≤ᶜ[Σ; X] Γ2` |
+| Primitive-operation context | Definition 4.9 | Primitive signature (`primop_sig`) and context (`primop_ctx`) in `ContextTyping/theories/PrimOpContext.v` (lines 17 and 30); well-formedness (`wf_primop_ctx`) in `ContextTyping/theories/PrimOpContext.v` (line 56) | `wf_primop_ctx Φ` |
+| Concrete primitive context | Concrete instance of Definition 4.9 | Concrete context (`concrete_Φ`) in `ContextTyping/theories/PrimOpConcreteContext.v` (line 171); well-formedness theorem (`concrete_Φ_wf`) in `ContextTyping/theories/PrimOpConcreteContext.v` (line 1297) | `concrete_Φ` |
+| Fundamental theorem (nondeterministic system) | Theorem 4.10 (deterministic statement in the paper); mechanized for the Section 5 nondeterministic calculus, which subsumes Theorem 4.10 | `Fundamental` in `ContextTyping/theories/Soundness.v` (line 977); concrete wrapper `concrete_Fundamental` in the same file (line 1152) | `Γ ⊢ᶜ [Φ; Σ] e ⋮ τ -> ⟦ctx⟧[Σ] Γ ⊫ ...` |
+| Denotational soundness (nondeterministic system) | Corollary 4.11 / Theorem 5.3; mechanized for the Section 5 nondeterministic calculus (covers the deterministic closed-program corollary as a special case) | `denotational_soundness` in `ContextTyping/theories/Soundness.v` (line 1079); concrete wrapper `concrete_denotational_soundness` in the same file (line 1159) | closed programs have a result world satisfying `TyDenote[...]`; concrete versions instantiate `Φ := concrete_Φ` |
+
+The mechanized Fundamental Theorem and denotational soundness are stated for
+the nondeterministic language of Section 5.  Instantiating them to programs
+that do not use generators or persistence recovers the deterministic
+metatheory of Sections 3--4 (Theorem 4.10 and Corollary 4.11); the same
+development therefore also serves as a formalization of that fragment.
 
 The artifact defines universal quantification and persistence in forms that
 are slightly different from the paper presentation because these definitions
@@ -363,6 +382,24 @@ Definition ty_guard_formula
 The guard definition is in `Denotation/theories/TypeDenote.v` (line 7), and
 the fixpoint begins with `guard[Σg; τ; e] ∧ ...` in the same file (lines
 122-127).
+
+The paper encodes these side conditions as
+`∀M{Dom(Σ)} Atom(...)`: the binding-reference operator first fixes the
+variables in `Σ`, and only then evaluates the exact atom.  In the artifact
+this pattern is packaged as the abbreviation `FFiberAtom` (`fiber_atom q`):
+
+```coq
+Definition FFiberAtom (q : qualifier) : Formula :=
+  FFibVars (qual_vars q) (FAtom q).
+(* fiber_atom q  ≜  fib (qual_vars q) |> @atom q *)
+```
+
+The guard conjuncts above are all instances of this sugar:
+`FWorld[Σ]`, `FWfTy[Σ; τ]`, `FHasType[Σ ⊢ e ⋮ ⌊τ⌋]`, and `FTotal[e]`
+are each defined as `FFiberAtom` of an appropriate qualifier
+(see `StoreTyping.v` and `BasicTypingFormula.v` / `TermEval.v`).
+Unlike the paper's single combined atom, the mechanization splits the guard
+into four such fiber-atoms and conjoins them.
 
 ### Typing proof core lemmas
 
