@@ -45,3 +45,20 @@ time-of-build-before.log
 time-of-build-both.log
 time-of-build.log
 time-of-build-pretty.log
+
+# generated documentation artifacts
+docs/*.aux
+docs/*.fdb_latexmk
+docs/*.fls
+docs/*.log
+docs/*.out
+docs/*.synctex*
+docs/missfont.log
+docs/fiber-support-refinement.png
+output/.DS_Store
+output/pdf/*.aux
+output/pdf/*.fdb_latexmk
+output/pdf/*.fls
+output/pdf/*.log
+output/pdf/*.out
+output/pdf/*.xdv

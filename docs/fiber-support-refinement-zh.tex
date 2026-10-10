@@ -1,0 +1,210 @@
+\documentclass[10pt]{ctexart}
+\usepackage[a4paper,margin=22mm]{geometry}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{stmaryrd}
+\usepackage{tikz}
+\usepackage{float}
+\usepackage[hidelinks]{hyperref}
+
+\newcommand{\FV}{\mathsf{FV}}
+\newcommand{\Fib}{\mathsf{Fiber}}
+\newcommand{\Bool}{\mathsf{Bool}}
+\newcommand{\false}{\mathsf{false}}
+\newcommand{\true}{\mathsf{true}}
+\newcommand{\restr}{\mathord{\upharpoonright}}
+\newcommand{\fiber}[2]{#1\mathbin{\triangleright}#2}
+\newcommand{\rfcomp}{\mathbin{\blacktriangleright}}
+\newcommand{\modelsr}{\mathrel{\models}}
+
+\title{Fiber 引导的支撑精化与类型否定}
+\author{}
+\date{}
+
+\begin{document}
+\pagestyle{plain}
+\maketitle
+
+\section{支撑扩充}
+
+一个 qualifier 由一个显式声明的有限支撑集，以及一个恰好定义在该支撑集上的
+store 谓词组成：
+\[
+  \phi=(D_\phi,\llbracket\phi\rrbracket),
+  \qquad D_\phi=\FV(\phi).
+\]
+对于有限集合 $X$，定义支撑扩充 $X.\{\phi\}$：
+\[
+  \FV(X.\{\phi\})=X\cup\FV(\phi),
+  \qquad
+  \sigma\modelsr X.\{\phi\}
+  \;\Longleftrightarrow\;
+  (\sigma\restr_{\FV(\phi)})\modelsr\phi.
+\]
+支撑扩充改变的是公式所观察的变量，而不是投影以后谓词的真值条件。特别地，
+$\{x\}.\{\top\}$ 在每个定义于 $x$ 的 store 上都成立，但与空支撑的 top
+不同，它显式观察变量 $x$。
+
+我们期望以下等式成立：
+\[
+  \varnothing.\{\phi\}\equiv\phi,
+  \qquad
+  X.\{Y.\{\phi\}\}\equiv(X\cup Y).\{\phi\},
+  \qquad
+  X\subseteq\FV(\phi)\Rightarrow X.\{\phi\}\equiv\phi.
+\]
+这里的等价不仅表示逐点逻辑等价，还包括声明的支撑集相同。
+
+\section{右向 fiber 算子}
+
+对于有限集合 $X$，公式 $\fiber{X}{P}$ 的含义是：固定 $X$ 的取值，并在每个
+相应 fiber 中检查代换后的公式：
+\begin{equation}\label{eq:fiber}
+  r\modelsr\fiber{X}{P}
+  \quad\Longleftrightarrow\quad
+  \forall \sigma_X\in r\restr_X.\;
+  \Fib(r,X,\sigma_X)\modelsr\sigma_X(P).
+\end{equation}
+这是 artifact 中 \texttt{FFibVars} connective 在论文层面的表达。
+
+在公式层面，将右向 fiber 组合记为
+\begin{equation}\label{eq:fcomp}
+  P\rfcomp Q
+  \;\triangleq\;
+  P\land\fiber{\FV(P)}{Q}.
+\end{equation}
+顺序在这里很重要：$Q$ 可以依赖于 $P$ 暴露出的选择。
+
+\section{与分离合取的关系}
+
+在 artifact 的笛卡尔 resource product 语义下，分离合取可以推出两个方向的
+fiber 组合：
+\begin{equation}\label{eq:star-to-fiber}
+  P*Q\modelsr P\rfcomp Q,
+  \qquad
+  P*Q\modelsr Q\rfcomp P.
+\end{equation}
+Resource product 包含任意 $P$-store 与任意相容 $Q$-store 的全部组合。因此，
+无论固定哪一侧的支撑，都仍然保留另一侧提供的全部选择。
+
+存在一个两个方向都可逆的精确片段。令
+\[
+  P\triangleq x:[b_1\mid\phi],
+  \qquad
+  Q\triangleq y:[b_2\mid\psi],
+  \qquad x\neq y,
+\]
+其中两个公式都是原子 Under 绑定，支撑互不相交，并且两个带类型 qualifier
+都是可满足的。定义 canonical value sets $A,B$。Under 要求 $A,B$ 中的每个
+点都被覆盖，因此任一方向的 fiber 组合都包含完整矩形 $A\times B$；这恰好
+是 $P*Q$ 所要求的 canonical product：
+\[
+  A\triangleq\{v\mid v:b_1\land\phi(v)\},
+  \qquad
+  B\triangleq\{w\mid w:b_2\land\psi(w)\},
+  \qquad
+  A\times B\subseteq r\restr_{\{x,y\}}.
+\]
+因此
+\begin{equation}\label{eq:under-equivalence}
+  P*Q
+  \quad\Longleftrightarrow\quad
+  P\rfcomp Q
+  \quad\Longleftrightarrow\quad
+  Q\rfcomp P.
+\end{equation}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1.15cm,y=1.05cm]
+  \draw[->] (-0.35,0) -- (4.1,0) node[right] {$A$（$x$）};
+  \draw[->] (0,-0.35) -- (0,3.25) node[above] {$B$（$y$）};
+  \foreach \x/\xl in {1/a_1,2/a_2,3/a_3} {
+    \draw (\x,0.08)--(\x,-0.08) node[below] {$\xl$};
+  }
+  \foreach \y/\yl in {1/b_1,2/b_2} {
+    \draw (0.08,\y)--(-0.08,\y) node[left] {$\yl$};
+  }
+  \foreach \x in {1,2,3} {
+    \foreach \y in {1,2} {
+      \fill (\x,\y) circle (2.4pt);
+      \draw[densely dotted,gray] (\x,0)--(\x,\y);
+    }
+  }
+  \draw[rounded corners,thick] (0.65,0.65) rectangle (3.35,2.35);
+  \node[align=center] at (2,2.72) {Under $\times$ Under 强制形成\\完整矩形 $A\times B$};
+\end{tikzpicture}
+\caption{对于 FV 不相交且可满足的原子 Under 公式，每个 $A$-fiber 都覆盖
+整个 $B$，因此 fiber composition 与 separating product 等价。}
+\label{fig:under-rectangle}
+\end{figure}
+
+对于一般公式，反方向不成立。最简单的失败例子使用 Over atom：
+\[
+  P\triangleq x:\{\Bool\mid\top\},
+  \qquad
+  Q\triangleq y:[\Bool\mid\top].
+\]
+取对角 capability
+\[
+  r_{\mathrm{diag}}
+  =\{(x=\false,y=\false),(x=\true,y=\true)\}.
+\]
+此时 $r_{\mathrm{diag}}\modelsr Q\rfcomp P$：$Q$ 覆盖 $y$ 的两个值；固定
+每个 $y$ 后，对应 fiber 含有一个安全的 Boolean $x$，这对 Over atom $P$
+已经足够。然而
+\[
+  r_{\mathrm{diag}}\not\modelsr P*Q.
+\]
+$Q$ 的 Under resource 必须包含两个 $y$ 值；它与任何非空 Over witness $P$
+的笛卡尔积都会包含非对角点。因此一般情况下 $*$ 严格更强。Under 构成精确
+片段，是因为它强制每个 fiber 覆盖同一个完整 canonical set。
+
+\section{依赖类型的否定}
+
+这里不需要定义新的 wand：普通 dependent arrow 可以不断暴露增长中的 fiber
+context。考虑一个参数和 result 全部都是 Over base type 的函数：
+\begin{equation}\label{eq:safety-example}
+  x:\{\mathsf{Nat}\mid\top\}\to
+  y:\{\mathsf{Nat}\mid x<\nu\}\to
+  \{\Bool\mid\psi(x,y,\nu)\}.
+\end{equation}
+传统的 negation translation 将每个 Over 参数变成 disjoint Under 参数，并对
+result qualifier 取反：
+\begin{equation}\label{eq:old-negation}
+  x:[\mathsf{Nat}\mid\top]\mathbin{-*}
+  y:[\mathsf{Nat}\mid x<\nu]\mathbin{-*}
+  [\Bool\mid\neg\psi(x,y,\nu)].
+\end{equation}
+第二个 separating premise 并不合适：它要求 $y$ 的 resource 与 $x$ disjoint，
+但 $y$ 的 qualifier 又同时读取 $x$。
+
+Fiber refinement 保留普通 arrow，并在后续参数和最终 Under result 中累计此前
+所有可见变量：
+\begin{equation}\label{eq:new-negation}
+  x:[\mathsf{Nat}\mid\top]\to
+  y:[\mathsf{Nat}\mid\{x\}.\{x<\nu\}]\to
+  [\Bool\mid\{x,y\}.\{\neg\psi(x,y,\nu)\}].
+\end{equation}
+在公式层面，参数 context 为
+\[
+  (x:[\mathsf{Nat}\mid\top])
+  \rfcomp
+  (y:[\mathsf{Nat}\mid x<\nu]).
+\]
+如果再加入依赖 $x,y$ 的参数 $z$，翻译使用
+\[
+  z:[b\mid\{x,y\}.\{\psi(x,y,\nu)\}],
+\]
+也就是再增加一层右向 fiber composition。因此 negation 将每个 Over 参数改成
+Under coverage，并将最终 Over result 改成 qualifier 取反后的 Under result。
+每个后续类型都通过增长 fiber observation set 保留依赖，而不是强制
+disjointness。
+
+\section{待证明性质}
+
+形式化开发应证明支撑扩充的正规化性质、式~\eqref{eq:star-to-fiber} 中的两条
+entailment，以及原子 Under characterization 式~\eqref{eq:under-equivalence}。
+随后还应形式化 Over diagonal 反例，并证明式~\eqref{eq:new-negation} 中累计
+fiber variables 的翻译能够正确实现 dependent parameter 的类型否定。
+
+\end{document}
