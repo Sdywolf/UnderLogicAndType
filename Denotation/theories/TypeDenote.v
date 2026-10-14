@@ -131,7 +131,7 @@ Fixpoint ty_denote_gas
       | CTOver b φ =>
           (∀.
             FResult[(⇑ₗ (dom Σg))%lvar ⊢ (e ↑)%core ⇓ #ₗ 0] →
-            fib (qual_vars φ ∖ {[LVBound 0]}) |>
+            fib ( qual_vars φ ∖ {[LVBound 0]}) |>
               over (@atom φ ∧
                 FHasType[(∅ ▷ TBase b)%lvar ⊢ (ret # 0)%core ⋮ TBase b]))%formula
       | CTUnder b φ =>

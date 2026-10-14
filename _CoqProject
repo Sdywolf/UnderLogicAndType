@@ -26,6 +26,7 @@ ContextStore/StoreInterface.v
 ContextStore/Store.v
 
 ContextQualifier/theories/Qualifier.v
+ContextQualifier/theories/SupportPadding.v
 
 ContextAlgebra/theories/ResourceCore.v
 ContextAlgebra/theories/ResourceAlgebra.v
@@ -46,6 +47,10 @@ ContextLogic/theories/FormulaConnectivesHigher.v
 ContextLogic/theories/FormulaFiberwise.v
 ContextLogic/theories/FormulaWorldExtension.v
 ContextLogic/theories/FormulaNotation.v
+ContextLogic/theories/FormulaNoninterference.v
+
+-R ContextLogic/examples ContextLogicExamples
+ContextLogic/examples/HypraSecure.v
 
 LocallyNameless/Classes.v
 LocallyNameless/Tactics.v
@@ -130,3 +135,9 @@ ContextTyping/theories/SoundnessFixSelf.v
 ContextTyping/theories/SoundnessFix.v
 ContextTyping/theories/SoundnessPersist.v
 ContextTyping/theories/Soundness.v
+ContextTyping/theories/FiberResult.v
+ContextTyping/theories/LowContextType.v
+
+-R ContextTyping/examples ContextTypingExamples
+ContextTyping/examples/HypraSecureTyping.v
+ContextTyping/examples/HypraSecureVC.v

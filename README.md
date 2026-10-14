@@ -140,6 +140,75 @@ ContextBase -> ContextStore -> ContextAlgebra -> ContextLogic
   typing rules, the parameterized direct Fundamental proof, and concrete
   soundness wrappers.
 
+## Context Logic example: Hypra noninterference
+
+`ContextLogic/examples/HypraSecure.v` formalizes the `secure` program from
+Hypra (OOPSLA 2024), Fig. 2, as an integer state transformer with both original
+conditionals. It constructs the exact output capability of an arbitrary
+nonempty input capability. This example stays at the Context Logic layer;
+it does not introduce a CoreLang encoding or a context-typing derivation.
+
+`ContextLogic/theories/FormulaNoninterference.v` defines formulas using only
+existing connectives:
+
+```coq
+FBound x := FOver (FAtom (qual_top_on {[LVFree x]})).
+FLow x := FStar (FBound x) (FBound x).
+FNoninterference l o := FFibVars {[LVFree l]} (FLow o).
+```
+
+`FLow_spec` proves that `FLow x` means every state agrees on `x`.
+The product permits overlapping bindings only when all pairs are compatible;
+using `x` in both factors therefore forces one common value. For distinct
+variable names `l` and `o`, `FNoninterference_spec` proves that the fiber
+formula means any two states agreeing on `l` also agree on `o`, with both
+variables in scope. Here `l` denotes the preserved input, and `o` the final
+output. No relational sum connective is added.
+
+The example proves `secure_noninterference` for arbitrary input capabilities,
+`secure_hypertriple` for Hypra's low-input/low-output specification, and
+`first_if_not_noninterfering` as a counterexample when the second conditional
+is omitted. Integers include negative inputs; capabilities are nonempty, as
+required by the existing resource model.
+
+After regenerating the makefile, check just this example with:
+
+```bash
+timeout 50s make ContextLogic/examples/HypraSecure.vo
+```
+
+## Noninterference result types and path VCs
+
+`ContextTyping/theories/FiberResult.v` adds a semantic result-type prototype:
+`Observe({low}, Low)` denotes exactly the existing `FNoninterference low out`.
+Its observation set is obtained using qualifier support padding (`qual_pad`,
+the dot operation from the fiber-support refinement note). Padding alone does
+not impose agreement; the Low body supplies that requirement. Low is proved
+equivalent to `FPersist (FBound out)`.
+
+`ContextTyping/examples/HypraSecureTyping.v` reuses the original signed-integer
+`secure` and `first_if` transformers. It proves the NI and Low-preserving
+function contracts equivalent to pointwise noninterference, accepts `secure`,
+and rejects `first_if`. `HypraSecureVC.v` generates all path-pair obligations
+from finite path summaries and proves their equivalence to the NI contract
+when those summaries are sound and cover all inputs. The original two-if
+program generates 16 VCs, all proved with integer arithmetic.
+
+These are semantic function contracts, not `has_context_type` derivations:
+the current CoreLang has no integer base type. `LowContextType.v` supplies an
+introduction bridge to the existing native type `CTPersist (CTOver b qual_top)`
+when basic result typing and Low are available. The full result-type fiber
+wrapper remains a separate prototype. Source-to-path compilation and a general
+automatic type checker are not implemented here.
+
+See `notes/noninterference-types-vc.md` for the type expressions, concrete VCs,
+counterexamples, and precise implementation boundaries. Focused checks:
+
+```bash
+rocq makefile -f _CoqProject -o Makefile
+timeout 50s make -j2 ContextTyping/examples/HypraSecureVC.vo ContextTyping/theories/LowContextType.vo
+```
+
 ## Proof Engineering Conventions
 
 - Normalize at proof boundaries: unfold and simplify erasure, relevant
