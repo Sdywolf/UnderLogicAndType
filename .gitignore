@@ -45,3 +45,26 @@ time-of-build-before.log
 time-of-build-both.log
 time-of-build.log
 time-of-build-pretty.log
+
+# LaTeX build artifacts
+*.aux
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.log
+*.lot
+*.nav
+*.out
+*.run.xml
+*.snm
+*.synctex.gz
+*.toc
+*.vrb
+*.xdv
+_minted-*
+
+# Editor and operating-system files
+*~
+.DS_Store
