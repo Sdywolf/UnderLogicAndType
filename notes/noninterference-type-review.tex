@@ -23,6 +23,10 @@
   \footnote{Rocq 声明及证明：
   \nolinkurl{/home/sdywolf/Project/UnderLogicAndType/#1}；
   第 #2 行起；#3。}}
+\newcommand{\rocqdefnote}[3]{%
+  \footnote{Rocq 对应定义：
+  \nolinkurl{/home/sdywolf/Project/UnderLogicAndType/#1}；
+  第 #2 行起；#3。}}
 \newtheorem{definition}{定义}[section]
 \newtheorem{proposition}[definition]{命题}
 \title{利用 dot 与 fiber 表达 Noninterference 的类型\\\large 类型定义、Denotational 语义与 Hypra 例子}
@@ -84,6 +88,7 @@ $X$ 是有限变量集。artifact 实际用带显式支持域的语义谓词表�
  \mid\Observe(X,\tau).
 \end{align}
 $\Observe(X,\tau)$ 扩展了原 context-type 语法，其余构造沿用 Context Types。
+\rocqdefnote{ContextTyping/theories/FiberResult.v}{10}{\texttt{RTObserve} 是结果类型原型；原生 \texttt{context\_ty} 尚未加入该构造}
 $\nu$ 在基础 refinement 内绑定；$x$ 在两个函数类型的返回类型内绑定。
 $X$ 是被观察的自由变量集合，不绑定新变量。
 \end{definition}
@@ -116,6 +121,7 @@ qualifier 的声明支持是 $\FV(\phi)$。按支持域扩充定义，
 \]
 因此不能从右侧投影满足原谓词，自动推断新增观察变量已绑定。
 \texttt{qual\_pad} 实现的是前一种带环境类型约束的版本。
+\rocqdefnote{ContextQualifier/theories/SupportPadding.v}{11}{\texttt{qual\_pad} 定义 qualifier 支持域扩充}
 
 对新增的整个类型构造，规定
 \begin{align*}
@@ -128,6 +134,7 @@ qualifier 的声明支持是 $\FV(\phi)$。按支持域扩充定义，
       {\Sigma\vdash_{\mathrm{WF}}\Observe(X,\tau)}.
 \]
 该规则规定观察变量必须在基本类型上下文中已绑定。其 Rocq 集成状态见第 8 节。
+\rocqdefnote{ContextTyping/theories/FiberResult.v}{75}{\texttt{fiber\_result\_denote} 对 \texttt{RTObserve} 给出结果层 fiber 解释；本文完整类型的 erasure 与良构规则尚未集成到原生类型定义}
 原函数类型的作用域照常处理：第二个参数和返回类型可以引用先前绑定的参数。
 
 \subsection{派生类型}
@@ -139,10 +146,12 @@ qualifier 的声明支持是 $\FV(\phi)$。按支持域扩充定义，
 \end{align}
 $\mathsf{Low}_b$ 使用 persistence 类型；$\mathsf{NI}_b(l)$ 使用整个类型的观察包装。
 两者均为式~\eqref{eq:type-syntax} 中类型表达式的派生缩写。
+\footnote{Rocq 对应定义：\nolinkurl{/home/sdywolf/Project/UnderLogicAndType/ContextTyping/theories/LowContextType.v} 第 6 行的 \texttt{low\_context\_ty} 给出原生 persistence 类型；\nolinkurl{/home/sdywolf/Project/UnderLogicAndType/ContextTyping/theories/FiberResult.v} 第 82 行的 \texttt{ni\_result\_ty} 给出 NI 结果类型原型。}
 \end{definition}
 
 \begin{definition}[Noninterference 函数类型]
 记 $\tau_{\top,b}:=\oty{b}{\top}$。为保持原程序参数顺序 $h,l$，定义
+\rocqdefnote{ContextQualifier/theories/Qualifier.v}{374}{\texttt{qual\_top\_on} 给出该 top qualifier 的实现}
 \begin{align}\label{eq:fnni}
  T_{\NI}&:=h:\tau_{\top,\mathsf{int}}\to
               l:\tau_{\top,\mathsf{int}}\to\mathsf{NI}_{\mathsf{int}}(l),\\
@@ -150,6 +159,7 @@ $\mathsf{Low}_b$ 使用 persistence 类型；$\mathsf{NI}_b(l)$ 使用整个类�
               l:\mathsf{Low}_{\mathsf{int}}\to\mathsf{Low}_{\mathsf{int}}.
  \label{eq:fnpres}
 \end{align}
+\footnote{Rocq 对应定义：\nolinkurl{/home/sdywolf/Project/UnderLogicAndType/ContextTyping/examples/HypraSecureTyping.v} 第 19 行的 \texttt{ni\_function\_type} 与第 21 行的 \texttt{low\_function\_type} 是这两种类型的结果 capability 契约；它们尚不是原生 \texttt{context\_ty} 上的函数类型声明。}
 两种函数类型均使用普通函数箭头，参数与返回类型按 context-type 语法组合。
 $T_{\NI}$ 允许不同低输入的结果不同；$T_{\mathrm{pres}}$ 检查低输入能力固定时是否保持结果固定。
 \end{definition}
@@ -294,6 +304,7 @@ $x$ 是新鲜参数名；wand 的参数绑定按照论文的 binder-aware 解释
  \boxed{\Den{\Observe(X,\tau)}_\Sigma e
        :=X\triangleright\bigl(\Den{\tau}_\Sigma e\bigr).}
 \end{equation}
+\rocqdefnote{ContextTyping/theories/FiberResult.v}{10}{\texttt{RTObserve} 及第 75 行的 \texttt{fiber\_result\_denote} 实现结果类型原型的 fiber 包装；这里的程序项级完整类型 denotation 尚未加入原生解释器}
 其中 $X\subseteq\dom(\Sigma)$，且新鲜结果槽 $\nu\notin X$。
 代入作用于内部完整公式，包含程序项、类型和 guard 所产生的观察。
 \end{definition}
@@ -337,6 +348,7 @@ qualifier-dot 作用于 qualifier 的支持域；$\Observe$ 将显式观察纪�
  B_\nu:=\omod\Atom(\{\nu\}.\{\top_{\varnothing}\}),\qquad
  \Low(\nu):=B_\nu\ast B_\nu.
 \]
+\rocqdefnote{ContextLogic/theories/FormulaNoninterference.v}{19}{\texttt{FBound} 与第 21 行的 \texttt{FLow} 是这两个公式的 Rocq 定义}
 对整数值域，$r\models B_\nu$ 等价于 $\nu\in\dom(r)$。\rocqnote{ContextLogic/theories/FormulaNoninterference.v}{41}{\texttt{FBound\_spec}}
 
 \begin{proposition}[结果 capability 上的 Low，已证明]
@@ -363,6 +375,8 @@ $\Low(\nu)$ 能推出 $\Den{\mathsf{Low}_b}_\Sigma\nu$。\rocqnote{ContextTyping
  \sigma(l)=\sigma'(l)\Longrightarrow\sigma(\nu)=\sigma'(\nu).
 \end{align*}
 该等价刻画固定公开输入后的输出一致性。\rocqnote{ContextTyping/theories/FiberResult.v}{98}{\texttt{ni\_result\_denote}；第 108 行的 \texttt{ni\_result\_spec}；第 90 行的 \texttt{padded\_low\_result\_eq}}
+
+公式 $l\triangleright\Low(\nu)$ 对应的逻辑定义为 \texttt{FNoninterference}。\rocqdefnote{ContextLogic/theories/FormulaNoninterference.v}{22}{\texttt{FNoninterference} 定义 low-fiber 输出一致性公式}
 \end{proposition}
 式~\eqref{eq:ni-term} 通过程序求值图建立输入 fiber 与结果 capability 的联系。
 从该类型解释到上述结果性质的桥接，需要求值图扩展、类型 guard 与观察操作的相容性。
@@ -373,6 +387,7 @@ $\Low(\nu)$ 能推出 $\Den{\mathsf{Low}_b}_\Sigma\nu$。\rocqnote{ContextTyping
 \[
  \Img_f(r):=\{\sigma[\nu\mapsto f(\sigma(h),\sigma(l))]\mid\sigma\in r\}.
 \]
+\rocqdefnote{ContextLogic/examples/HypraSecure.v}{55}{\texttt{outputs} 构造输入 capability 的完整输出像}
 记 $P_{\mathrm{all}}:=B_h\land B_l$，$P_{\mathrm{low}}:=B_h\land\Low(l)$，以及
 \begin{align*}
  C_{\NI}(f)&:=\forall r.\ r\models P_{\mathrm{all}}\Longrightarrow
@@ -380,6 +395,7 @@ $\Low(\nu)$ 能推出 $\Den{\mathsf{Low}_b}_\Sigma\nu$。\rocqnote{ContextTyping
  C_{\mathrm{pres}}(f)&:=\forall r.\ r\models P_{\mathrm{low}}\Longrightarrow
                           \Img_f(r)\models\Low(\nu).
 \end{align*}
+\footnote{Rocq 对应定义：\nolinkurl{/home/sdywolf/Project/UnderLogicAndType/ContextTyping/theories/FiberResult.v} 第 118 行的 \texttt{has\_fiber\_function\_type}，以及 \nolinkurl{/home/sdywolf/Project/UnderLogicAndType/ContextTyping/examples/HypraSecureTyping.v} 第 19、21 行的 \texttt{ni\_function\_type}、\texttt{low\_function\_type}；后两者使用该通用结果 capability 契约实例化本文的两个函数规格。}
 $C_{\NI}$、$C_{\mathrm{pres}}$ 分别刻画任意输入 capability 的 low-fiber 一致性与公开输入固定时的一致性保持。
 
 \begin{proposition}[辅助契约的准确性，已证明]
@@ -444,6 +460,7 @@ secure(h,l) := let o = first\_if(h,l) in\\
  \Longrightarrow E_i(h_1,l)=E_j(h_2,l).
 \end{equation}
 不增加 $h_1=h_2$ 或 $i=j$ 的约束。
+\rocqdefnote{ContextTyping/examples/HypraSecureVC.v}{12}{\texttt{path}、第 25 行的 \texttt{path\_pair\_vc} 与第 30--32 行的 \texttt{vcgen}/\texttt{vcs\_valid} 实现有限路径摘要及其成对 VC}
 
 原两个条件产生四条符号路径：
 \begin{center}
